@@ -47,11 +47,6 @@ void Parser::readQDIMACS(istream& ifs) {
   ifs >> token;
   assert(token == "cnf");
 
-  // the declared number of clauses: when reading from the standard input, no more than this many will be read
-	uint32_t num_clauses;
-  // the declared bound on the number of variables
-  uint32_t max_var;
-
 	ifs >> max_var;
 	ifs >> num_clauses;
 

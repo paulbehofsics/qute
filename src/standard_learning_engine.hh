@@ -11,6 +11,7 @@
 using std::fill;
 using std::vector;
 using std::string;
+using std::sort;
 
 namespace Qute {
 
@@ -23,7 +24,6 @@ public:
   string reducedLast();
 
 protected:
-  vector<bool> constraintToCf(Constraint& constraint, ConstraintType constraint_type, Literal& rightmost_primary);
   bool cfToLiteralVector(vector<bool>& characteristic_function, vector<Literal>& literal_vector, Literal& rightmost_primary) const;
   vector<uint32_t> getPrimaryLiteralDecisionLevelCounts(Constraint& constraint, ConstraintType constraint_type);
   vector<uint32_t> getPrimaryLiteralDecisionLevelCounts(vector<bool>& characteristic_function, Literal& rightmost_primary, ConstraintType constraint_type);

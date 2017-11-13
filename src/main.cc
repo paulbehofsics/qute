@@ -297,8 +297,22 @@ int main(int argc, char** argv)
 
     lbool result = solver->solve();
 
-    if (result != l_Undef && vm["partial-certificate"].as<bool>() && !learning_engine.reducedLast().empty()) {
-      cout << "v " << learning_engine.reducedLast() << "0\n";
+    if (vm["partial-certificate"].as<bool>()) {
+      cout << "s cnf " << static_cast<int>(result) << " " << parser.getVarsPreamble() << " " << parser.getClausesPreamble() << "\n";
+      if (result != l_Undef && !learning_engine.reducedLast().empty()) {
+        cout << learning_engine.reducedLast();
+      }
+    } else {
+      switch (result) {
+        case l_True: 
+          cout << "SAT\n";
+          break;
+        case l_False: 
+          cout << "UNSAT\n";
+          break;
+        default: 
+          cout << "UNDEF\n";
+      }
     }
 
     if (vm["print-stats"].as<bool>()) {
@@ -309,15 +323,13 @@ int main(int argc, char** argv)
     delete restart_scheduler;
     delete decision_heuristic;
 
-    if (result == l_True) {
-      cout << "SAT\n";
-      return 10;
-    } else if (result == l_False) {
-      cout << "UNSAT\n";
-      return 20;
-    } else {
-      cout << "UNDEF\n";
-      return 0;
+    switch (result) {
+      case l_True: 
+        return 10;
+      case l_False:
+        return 20;
+      default:
+        return 0;
     }
   }
   catch (const program_options::error &ex) {

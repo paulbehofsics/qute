@@ -6,15 +6,30 @@ namespace Qute {
 StandardLearningEngine::StandardLearningEngine(QCDCL_solver& solver): solver(solver) {}
 
 void StandardLearningEngine::analyzeConflict(CRef conflict_constraint_reference, ConstraintType constraint_type, vector<Literal>& literal_vector, uint32_t& decision_level_backtrack_before, Literal& unit_literal, bool& constraint_learned) {
-  Constraint& constraint = solver.constraint_database->getConstraint(conflict_constraint_reference, constraint_type);
-  if (constraint.learnt) {
-    solver.constraint_database->updateLBD(constraint);
-    solver.constraint_database->bumpConstraintActivity(constraint, constraint_type);
+  Constraint& conflict_constraint = solver.constraint_database->getConstraint(conflict_constraint_reference, constraint_type);
+  if (conflict_constraint.learnt) {
+    solver.constraint_database->updateLBD(conflict_constraint);
+    solver.constraint_database->bumpConstraintActivity(conflict_constraint, constraint_type);
   }
   Literal rightmost_primary = Literal_Undef;
-  vector<bool> characteristic_function = constraintToCf(constraint, constraint_type, rightmost_primary);
+  vector<bool> characteristic_function(solver.variable_data_store->lastVariable() + solver.variable_data_store->lastVariable() + 2);
+  fill(characteristic_function.begin(), characteristic_function.end(), false);
+  for (Literal l: conflict_constraint) {
+    characteristic_function[toInt(l)] = true;
+    if (solver.variable_data_store->varType(var(l)) == constraint_type && rightmost_primary < l) {
+      rightmost_primary = l;
+    }
+  }
+  reduced_last.clear();
+  for (Literal l: conflict_constraint) {
+    // Apply universal/existential reduction to conflict constraint.
+    if (rightmost_primary < l) {
+      characteristic_function[toInt(l)] = false;
+      reduced_last.push_back(l);
+    }
+  }
 
-  vector<uint32_t> primary_literal_decision_level_counts = getPrimaryLiteralDecisionLevelCounts(constraint, constraint_type);
+  vector<uint32_t> primary_literal_decision_level_counts = getPrimaryLiteralDecisionLevelCounts(conflict_constraint, constraint_type);
   assert(getPrimaryLiteralDecisionLevelCounts(characteristic_function, rightmost_primary, constraint_type) == primary_literal_decision_level_counts);
   vector<Literal> primary_trail;
 
@@ -62,20 +77,6 @@ void StandardLearningEngine::analyzeConflict(CRef conflict_constraint_reference,
   }
   // The constraint represented by "characteristic_function" is empty, return.
   constraint_learned = true;
-}
-
-vector<bool> StandardLearningEngine::constraintToCf(Constraint& constraint, ConstraintType constraint_type, Literal& rightmost_primary) {
-  vector<bool> characteristic_function(solver.variable_data_store->lastVariable() + solver.variable_data_store->lastVariable() + 2);
-  fill(characteristic_function.begin(), characteristic_function.end(), false);
-  for (Literal l: constraint) {
-    if (solver.variable_data_store->varType(var(l)) == constraint_type && rightmost_primary < l) {
-      rightmost_primary = l;
-    }
-  }
-  for (Literal l: constraint) {
-    characteristic_function[toInt(l)] = l <= rightmost_primary;
-  }
-  return characteristic_function;
 }
 
 vector<uint32_t> StandardLearningEngine::getPrimaryLiteralDecisionLevelCounts(vector<bool>& characteristic_function, Literal& rightmost_primary, ConstraintType constraint_type) {
@@ -148,6 +149,9 @@ void StandardLearningEngine::resolveAndReduce(vector<bool>& characteristic_funct
   }
   if (literal_vector.empty()) {
     // No illegal merges occurred.
+    for (Literal l: secondary_literals_reason) {
+      characteristic_function[toInt(l)] = l < rightmost_primary;
+    }
     if (rightmost_primary == pivot) {
       reduced_last.clear();
       // Look for new rightmost primary literal, reduce secondaries along the way.
@@ -162,9 +166,6 @@ void StandardLearningEngine::resolveAndReduce(vector<bool>& characteristic_funct
           reduced_last.push_back(toLiteral(i));
         }
       }
-    }
-    for (Literal l: secondary_literals_reason) {
-      characteristic_function[toInt(l)] = l < rightmost_primary;
     }
   }
 }
@@ -193,11 +194,13 @@ string StandardLearningEngine::reducedLast() {
     Variable v;
     bool first_type =  solver.variable_data_store->varType(1);
     for (v = 1; v <= solver.variable_data_store->lastVariable() && solver.variable_data_store->varType(v) == first_type; v++);
+    sort(reduced_last.begin(), reduced_last.end());
     for (Literal l: reduced_last) {
       if (var(l) < v) {
+        out_string += "V ";
         out_string += (sign(l) ? "" : "-");
         out_string += solver.variable_data_store->originalName(var(l));
-        out_string += " ";
+        out_string += "\n";
       }
     }
   }

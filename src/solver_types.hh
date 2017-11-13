@@ -38,7 +38,7 @@ typedef int8_t lbool;
 
 const lbool l_False = 0;
 const lbool l_True = 1;
-const lbool l_Undef = 2;
+const lbool l_Undef = -1;
 
 enum ConstraintType: unsigned short { clauses = 0, terms = 1 };
 const vector<ConstraintType> constraint_types = {ConstraintType::clauses, ConstraintType::terms};

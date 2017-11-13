@@ -17,6 +17,11 @@ class Parser
   bool use_model_generation;
   std::map<std::string, int32_t> qcir_var_conversion_map;
   int32_t nr_vars;
+  
+  // the declared number of clauses: when reading from the standard input, no more than this many will be read
+	uint32_t num_clauses = 0;
+  // the declared bound on the number of variables
+  uint32_t max_var = 0;
 
   // helper methods
   char* uintToCharArray(uint32_t x);
@@ -33,6 +38,8 @@ public:
   void readQCIR(std::istream& ifs = std::cin);
   void readQDIMACS(std::istream& ifs = std::cin);
   void writeQDIMACS();
+  uint32_t getVarsPreamble() { return max_var; }
+  uint32_t getClausesPreamble() { return num_clauses; }
 };
 
 }
