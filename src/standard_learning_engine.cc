@@ -197,10 +197,10 @@ string StandardLearningEngine::reducedLast() {
     sort(reduced_last.begin(), reduced_last.end());
     for (Literal l: reduced_last) {
       if (var(l) < v) {
-        out_string += "V ";
+        //out_string += "V ";
         out_string += (sign(l) ? "" : "-");
         out_string += solver.variable_data_store->originalName(var(l));
-        out_string += "\n";
+        //out_string += "\n";
       }
     }
   }

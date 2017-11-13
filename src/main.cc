@@ -297,22 +297,10 @@ int main(int argc, char** argv)
 
     lbool result = solver->solve();
 
-    if (vm["partial-certificate"].as<bool>()) {
-      cout << "s cnf " << static_cast<int>(result) << " " << parser.getVarsPreamble() << " " << parser.getClausesPreamble() << "\n";
-      if (result != l_Undef && !learning_engine.reducedLast().empty()) {
-        cout << learning_engine.reducedLast();
-      }
-    } else {
-      switch (result) {
-        case l_True: 
-          cout << "SAT\n";
-          break;
-        case l_False: 
-          cout << "UNSAT\n";
-          break;
-        default: 
-          cout << "UNDEF\n";
-      }
+    if (vm["partial-certificate"].as<bool>() && result != l_Undef && !learning_engine.reducedLast().empty()) {
+      // Preamble for output according to QDIMACS
+      // cout << "s cnf " << static_cast<int>(result) << " " << parser.getVarsPreamble() << " " << parser.getClausesPreamble() << "\n";
+      cout << "v " << learning_engine.reducedLast() << "0\n";
     }
 
     if (vm["print-stats"].as<bool>()) {
@@ -324,11 +312,14 @@ int main(int argc, char** argv)
     delete decision_heuristic;
 
     switch (result) {
-      case l_True: 
+      case l_True:
+        cout << "SAT\n";
         return 10;
       case l_False:
+        cout << "UNSAT\n";
         return 20;
       default:
+        cout << "UNDEF\n";
         return 0;
     }
   }
