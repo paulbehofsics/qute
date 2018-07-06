@@ -1,18 +1,11 @@
+#include <limits>
 #include <functional>
 #include <csignal>
 #include <iostream>
 #include <string>
-#include <boost/program_options.hpp>
-#include <boost/log/core.hpp>
-#include <boost/log/trivial.hpp>
-#include <boost/log/expressions.hpp>
-#include <boost/log/support/date_time.hpp>
-#include <boost/log/sources/logger.hpp>
-#include <boost/log/utility/setup/console.hpp>
-#include <boost/log/utility/setup/common_attributes.hpp>
-#include <boost/log/support/date_time.hpp>
-#include <boost/date_time/posix_time/posix_time_types.hpp>
 
+#include "main.hh"
+#include "logging.hh"
 #include "qcdcl.hh"
 #include "parser.hh"
 #include "solver_types.hh"
@@ -20,15 +13,17 @@
 #include "decision_heuristic_VMTF_deplearn.hh"
 #include "decision_heuristic_VMTF_prefix.hh"
 #include "decision_heuristic_VSIDS_deplearn.hh"
+#include "decision_heuristic_SGDB.hh"
 #include "dependency_manager_watched.hh"
 #include "restart_scheduler_none.hh"
 #include "restart_scheduler_inner_outer.hh"
+#include "restart_scheduler_ema.hh"
+#include "restart_scheduler_luby.hh"
 #include "standard_learning_engine.hh"
 #include "variable_data.hh"
 #include "watched_literal_propagator.hh"
 
 using namespace Qute;
-using namespace boost;
 using namespace std::placeholders;
 using std::cerr;
 using std::cout;
@@ -36,297 +31,322 @@ using std::ifstream;
 using std::to_string;
 using std::string;
 
-namespace logging = boost::log;
-
-static QCDCL_solver* solver;
+static unique_ptr<QCDCL_solver> solver;
 
 void signal_handler(int signal)
 {
   solver->interrupt();
 }
 
-void checkPhaseHeuristic(string value, string option_string) {
-  if (!(value == "invJW") && !(value == "qtype") && !(value == "watcher") && !(value == "random") && !(value == "true") && !(value == "false")) {
-    throw program_options::error(option_string + " must be one of 'invJW', 'qtype', 'watcher', random', 'true', or 'false'");
-  }
-}
+static const char USAGE[] =
+R"(Usage: qute [options] [<path>]
 
-void checkIntervalDouble(double value, string option_string, double lower = 0, double upper = 1, bool excluding_lower = false, bool excluding_upper = false) {
-  if ((value < lower || (excluding_lower && value == lower)) || (value > upper || (excluding_upper && value == upper))) {
-    string lower_bracket = excluding_lower ? "(" : "[";
-    string upper_bracket = excluding_upper ? ")" : "]";
-    throw boost::program_options::error(option_string + " must be in the interval " + lower_bracket + to_string(lower) + ", " + to_string(upper) + upper_bracket);
-  }
-}
+General Options:
+  --initial-clause-DB-size <int>        initial learnt clause DB size [default: 4000]
+  --initial-term-DB-size <int>          initial learnt term DB size [default: 500]
+  --clause-DB-increment <int>           clause database size increment [default: 4000]
+  --term-DB-increment <int>             term database size increment [default: 500]
+  --clause-removal-ratio <double>       fraction of clauses removed while cleaning [default: 0.5]
+  --term-removal-ratio <double>         fraction of terms removed while cleaning [default: 0.5]
+  --use-activity-threshold              remove all constraints with activities below threshold
+  --LBD-threshold <int>                 only remove constraints with LBD larger than this [default: 2]
+  --constraint-activity-inc <double>    constraint activity increment [default: 1]
+  --constraint-activity-decay <double>  constraint activity decay [default: 0.999]
+  --decision-heuristic arg              variable decision heuristic [default: VMTF]
+                                        (VSIDS | VMTF | SGDB)
+  --restarts arg                        restart strategy [default: inner-outer]
+                                        (off | luby | inner-outer | EMA)
+  --model-generation arg                model generation strategy for initial terms [default: depqbf]
+                                        (off | depqbf | weighted)
+  --dependency-learning arg             dependency learning strategy
+                                        (off | outermost | fewest | all) [default: all]
+  --no-phase-saving                     deactivate phase saving
+  --phase-heuristic arg                 phase selection heuristic [default: watcher]
+                                        (invJW, qtype, watcher, random, false, true) 
+  --partial-certificate                 output assignment to outermost block
+  -v --verbose                          output information during solver run
+  --print-stats                         print statistics on termination
 
-void checkIntervalInt(int value, string option_string, int lower = 0, int upper = 1, bool excluding_lower = false, bool excluding_upper = false) {
-  if ((value < lower || (excluding_lower && value == lower)) || (value > upper || (excluding_upper && value == upper))) {
-    string lower_bracket = excluding_lower ? "(" : "[";
-    string upper_bracket = excluding_upper ? ")" : "]";
-    throw boost::program_options::error(option_string + " must be an integer in the interval " + lower_bracket + to_string(lower) + ", " + to_string(upper) + upper_bracket);
-  }
-}
+Weighted Model Generation Options:
+  --exponent <double>                   exponent skewing the distribution of weights [default: 1]
+  --scaling-factor <double>             scaling factor for variable weights [default: 1]
+  --universal-penalty <double>          additive penalty for universal variables [default: 0]
 
-void checkVariableDecay(double value, string option_string, program_options::variables_map* vm) {
-  if (!(*vm)["var-activity-decay"].defaulted() && (*vm)["decision-heuristic"].as<int>() == 0) {
-    throw program_options::error(option_string + " can only be used with VSIDS decision heuristic");
-  }
-  checkIntervalDouble(value, "var-activity-decay", 0, 1, true, false);
-}
+VSIDS Options:
+  --tiebreak arg                        tiebreaking strategy for equally active variables [default: arbitrary]
+                                        (arbitrary, more-primary, fewer-primary, more-secondary, fewer-secondary)
+  --var-activity-inc <double>           variable activity increment [default: 1]
+  --var-activity-decay <double>         variable activity decay [default: 0.95]
 
-void checkVariableIncrement(double value, string option_string, program_options::variables_map* vm) {
-  if (!(*vm)["var-activity-inc"].defaulted() && (*vm)["decision-heuristic"].as<int>() == 0) {
-    throw program_options::error(option_string + " can only be used with VSIDS decision heuristic");
-  }
-  checkIntervalDouble(value, "var-activity-inc", 0, 10, true, false);
-}
+SGDB Options:
+  --initial-learning-rate <double>      Initial learning rate [default: 0.8]
+  --learning-rate-decay <double>        Learning rate additive decay [default: 2e-6]
+  --learning-rate-minimum <double>      Minimum learning rate [default: 0.12]
+  --lambda-factor <double>              Regularization parameter [default: 0.1]
 
-void checkGreaterZero(int32_t value, string option_string, bool equal) {
-  if (value < 0 || (!equal && value == 0)) {
-    string or_equal = equal ? "or equal " : "";
-    throw boost::program_options::error(option_string + " must be greater than " + or_equal + "0");
-  }
-}
+Luby Restart Options:
+  --luby-restart-multiplier <int>       Multiplier for restart intervals [default: 50]
 
-void checkRestartParameters(bool value, program_options::variables_map* vm) {
-  if (value && (!(*vm)["inner-restart-distance"].defaulted() || !(*vm)["outer-restart-distance"].defaulted() || !(*vm)["restart-multiplier"].defaulted())) {
-    throw boost::program_options::error("cannot use options \"inner-restart-distance\", \"outer-restart-distance\", or \"restart-multiplier\" together with \"no-restarts\"");
-  }
-}
+EMA Restart Options:
+  --alpha <double>                      Weight of new constraint LBD [default: 2e-5]
+  --minimum-distance <int>              Minimum restart distance [default: 20]
+  --threshold-factor <double>           Restart if short term LBD is this much larger than long term LBD [default: 1.4]
 
-int main(int argc, char** argv)
+Outer-Inner Restart Options:
+  --inner-restart-distance <int>        initial number of conflicts until inner restart [default: 100]
+  --outer-restart-distance <int>        initial number of conflicts until outer restart [default: 100]
+  --restart-multiplier <double>         restart limit multiplier [default: 1.1]
+
+)";
+
+int main(int argc, const char** argv)
 {
-  program_options::variables_map vm;
-  program_options::options_description generic{"Options"};
-  generic.add_options()
-    ("help,h", "display this help message")
-    ("initial-clause-DB-size", program_options::value<int32_t>()->default_value(4000)->
-      notifier(std::bind(checkGreaterZero, _1, "initial-clause-DB-size", true)), "set initial learnt clause DB size")
-    ("initial-term-DB-size", program_options::value<int32_t>()->default_value(500)->
-      notifier(std::bind(checkGreaterZero, _1, "initial-term-DB-size", true)), "set initial learnt term DB size")
-    ("clause-DB-increment", program_options::value<int32_t>()->default_value(4000)->
-      notifier(std::bind(checkGreaterZero, _1, "clause-DB-increment", true)), "set clause database size increment")
-    ("term-DB-increment", program_options::value<int32_t>()->default_value(500)->
-      notifier(std::bind(checkGreaterZero, _1, "term-DB-increment", true)), "set term database size increment")
-    ("clause-removal-ratio", program_options::value<double>()->default_value(0.5)->
-      notifier(std::bind(checkIntervalDouble, _1, "clause-removal-ratio", 0, 1, false, false)), "set fraction of clauses removed while cleaning")
-    ("term-removal-ratio", program_options::value<double>()->default_value(0.5)->
-      notifier(std::bind(checkIntervalDouble, _1, "term-removal-ratio", 0, 1, false, false)), "set fraction of terms removed while cleaning")
-    ("decision-heuristic", program_options::value<int>()->default_value(0)->
-      notifier(std::bind(checkIntervalInt, _1, "decision-heuristic", 0, 5, false, false)),
-      "Set variable decision heuristic.\n"
-      "0 - VMTF\n"
-      "1 - VSIDS\n"
-      "2 - VSIDS (if equally active, pick variable with more primary occurrences)\n"
-      "3 - VSIDS (if equally active, pick variable with fewer primary occurrences)\n"
-      "4 - VSIDS (if equally active, pick variable with more secondary occurrences)\n"
-      "5 - VSIDS (if equally active, pick variable with fewer secondary occurrences)")
-    ("var-activity-inc", program_options::value<double>()->default_value(1, "1")->
-      notifier(std::bind(checkVariableIncrement, _1, "var-activity-inc", &vm)), "set variable activity increment (VSIDS only)")
-    ("var-activity-decay", program_options::value<double>()->default_value(0.95, "0.95")->
-      notifier(std::bind(checkVariableDecay, _1, "var-activity-decay", &vm)), "set variable activity decay (VSIDS only)")
-    ("use-activity-threshold", program_options::bool_switch(), "remove constraints with activities below threshold")
-    ("constraint-activity-inc", program_options::value<double>()->default_value(1, "1")->
-      notifier(std::bind(checkIntervalDouble, _1, "constraint-activity-inc", -10, 10, false, false)), "set constraint activity decay")
-    ("constraint-activity-decay", program_options::value<double>()->default_value(0.999)->
-      notifier(std::bind(checkIntervalDouble, _1, "constraint-activity-decay", 0, 1, false, true)), "set constraint activity decay")
-    ("no-restarts", program_options::bool_switch()->
-      notifier(std::bind(checkRestartParameters, _1, &vm)), "turn restarts off")
-    ("model-generation", program_options::bool_switch(), "obtain initial terms by model generation")
-    ("inner-restart-distance", program_options::value<int32_t>()->default_value(100)->
-      notifier(std::bind(checkGreaterZero, _1, "inner-restart-distance", false)), "set initial number of conflicts until inner restart")
-    ("outer-restart-distance", program_options::value<int32_t>()->default_value(100)->
-      notifier(std::bind(checkGreaterZero, _1, "outer-restart-distance", false)), "set initial number of conflicts until inner restart")
-    ("restart-multiplier", program_options::value<double>()->default_value(1.1, "1.1")->
-      notifier(std::bind(checkIntervalDouble, _1, "restart-multiplier", 1, 5, false, false)), "restart limit multiplier")
-    ("no-phase-saving", program_options::bool_switch(), "deactivate phase saving (always use phase selection heuristic)")
-    ("partial-certificate", program_options::bool_switch(), "output assignment to outermost block")
-    ("phase-heuristic", program_options::value<string>()->default_value("invJW")->
-      notifier(std::bind(checkPhaseHeuristic, _1, "phase-heuristic")), "phase selection heuristic (invJW, qtype, watcher, random, false, true)")
-    ("prefix-mode", program_options::bool_switch(), "run the solver in prefix mode (no dependency learning)")
-    ("verbose,v", program_options::bool_switch(), "output information during solver run")
-    ("print-stats", program_options::bool_switch(), "print solver statistics");
-    //("trace", boost::program_options::bool_switch(), "enable tracing");
+  std::map<std::string, docopt::value> args = docopt::docopt(USAGE, { argv + 1, argv + argc }, true, "Qute v.1.1");
 
-  program_options::options_description hidden{"Hidden options"};
-  hidden.add_options()
-    ("input-file", program_options::value<string>(), "input file");
-  //   ("limit", boost::program_options::value<uint32_t>()->default_value(0)->implicit_value(2147483648), "set a limit on the trace size, implicitly 2GB");
+  /*for (auto arg: args) { // For debugging only.
+    std::cout << arg.first << " " << arg.second << "\n";
+  }*/
 
-  program_options::positional_options_description po_desc;
-  po_desc.add("input-file", 1);
+  // BEGIN Command Line Parameter Validation
 
-  program_options::options_description all_options;
-  all_options.add(generic).add(hidden);
+  vector<unique_ptr<ArgumentConstraint>> argument_constraints;
+  regex non_neg_int("[[:digit:]]+");
+  argument_constraints.push_back(make_unique<RegexArgumentConstraint>(non_neg_int, "--initial-clause-DB-size", "unsigned int"));
+  argument_constraints.push_back(make_unique<RegexArgumentConstraint>(non_neg_int, "--initial-term-DB-size", "unsigned int"));
+  argument_constraints.push_back(make_unique<RegexArgumentConstraint>(non_neg_int, "--clause-DB-increment", "unsigned int"));
+  argument_constraints.push_back(make_unique<RegexArgumentConstraint>(non_neg_int, "--term-DB-increment", "unsigned int"));
 
-  try {
-    program_options::store(program_options::command_line_parser(argc, argv).options(all_options).positional(po_desc).run(), vm);
-    if (vm.count("help")) {
-      cout << "Usage: qute FILENAME [Options] \n\n";
-      cout << generic << "\n";
+  argument_constraints.push_back(make_unique<DoubleRangeConstraint>(0, 1, "--clause-removal-ratio"));
+  argument_constraints.push_back(make_unique<DoubleRangeConstraint>(0, 1, "--term-removal-ratio"));
+
+  argument_constraints.push_back(make_unique<DoubleConstraint>("--constraint-activity-inc"));
+  // argument_constraints.push_back(make_unique<DoubleConstraint>("--activity-threshold"));
+  argument_constraints.push_back(make_unique<RegexArgumentConstraint>(non_neg_int, "--LBD-threshold", "unsigned int"));
+  argument_constraints.push_back(make_unique<DoubleRangeConstraint>(0, 1, "--constraint-activity-decay"));
+
+  vector<string> decision_heuristics = {"VSIDS", "VMTF", "SGDB"};
+  argument_constraints.push_back(make_unique<ListConstraint>(decision_heuristics, "--decision-heuristic"));
+  
+  vector<string> restart_strategies = {"off", "luby", "inner-outer", "EMA"};
+  argument_constraints.push_back(make_unique<ListConstraint>(restart_strategies, "--restarts"));
+
+  vector<string> model_generation_strategies = {"off", "depqbf", "weighted"};
+  argument_constraints.push_back(make_unique<ListConstraint>(model_generation_strategies, "--model-generation"));
+
+  vector<string> dependency_learning_strategies = {"off", "outermost", "fewest", "all"};
+  argument_constraints.push_back(make_unique<ListConstraint>(dependency_learning_strategies, "--dependency-learning"));
+
+  vector<string> phase_heuristics = {"invJW", "qtype", "watcher", "random", "false", "true"};
+  argument_constraints.push_back(make_unique<ListConstraint>(phase_heuristics, "--phase-heuristic"));
+
+  vector<string> VSIDS_tiebreak_strategies = {"arbitrary", "more-primary", "fewer-primary", "more-secondary", "fewer-secondary"};
+  argument_constraints.push_back(make_unique<ListConstraint>(VSIDS_tiebreak_strategies, "--tiebreak"));
+
+  argument_constraints.push_back(make_unique<DoubleRangeConstraint>(0.5, 2, "--exponent"));
+  argument_constraints.push_back(make_unique<DoubleRangeConstraint>(0, 1, "--scaling-factor"));
+  argument_constraints.push_back(make_unique<DoubleRangeConstraint>(0, 1, "--universal-penalty"));
+
+  argument_constraints.push_back(make_unique<DoubleConstraint>("--var-activity-inc"));
+  argument_constraints.push_back(make_unique<DoubleRangeConstraint>(0, 1, "--var-activity-decay"));
+
+  argument_constraints.push_back(make_unique<DoubleRangeConstraint>(0, 1, "--initial-learning-rate"));
+  argument_constraints.push_back(make_unique<DoubleRangeConstraint>(0, 1, "--learning-rate-decay"));
+  argument_constraints.push_back(make_unique<DoubleRangeConstraint>(0, 1, "--learning-rate-minimum"));
+  argument_constraints.push_back(make_unique<DoubleRangeConstraint>(0, 1, "--lambda-factor"));
+
+  argument_constraints.push_back(make_unique<DoubleRangeConstraint>(1, std::numeric_limits<double>::infinity(), "--luby-restart-multiplier", false, true));
+
+  argument_constraints.push_back(make_unique<DoubleRangeConstraint>(0, 1, "--alpha"));
+  argument_constraints.push_back(make_unique<RegexArgumentConstraint>(non_neg_int, "--minimum-distance", "unsigned int"));
+  argument_constraints.push_back(make_unique<DoubleRangeConstraint>(0, std::numeric_limits<double>::infinity(), "--threshold-factor", false, true));
+
+  argument_constraints.push_back(make_unique<RegexArgumentConstraint>(non_neg_int, "--inner-restart-distance", "unsigned int"));
+  argument_constraints.push_back(make_unique<RegexArgumentConstraint>(non_neg_int, "--outer-restart-distance", "unsigned int"));
+  argument_constraints.push_back(make_unique<DoubleRangeConstraint>(1, std::numeric_limits<double>::infinity(), "--restart-multiplier", false, true));
+
+  argument_constraints.push_back(make_unique<IfThenConstraint>("--dependency-learning", "off", "--decision-heuristic", "VMTF",
+    "decision heuristic must be VMTF if dependency learning is deactivated"));
+
+  for (auto& constraint_ptr: argument_constraints) {
+    if (!constraint_ptr->check(args)) {
+      std::cout << constraint_ptr->message() << "\n\n";
+      std::cout << USAGE;
       return 0;
     }
-    notify(vm);
+  }
 
-    solver = new QCDCL_solver();
+  // END Command Line Parameter Validation
+  solver = make_unique<QCDCL_solver>();
 
-    ConstraintDB constraint_database(*solver,
-                                     false,
-                                     vm["constraint-activity-decay"].as<double>(), 
-                                     static_cast<uint32_t>(vm["initial-clause-DB-size"].as<int32_t>()),
-                                     static_cast<uint32_t>(vm["initial-term-DB-size"].as<int32_t>()),
-                                     static_cast<uint32_t>(vm["clause-DB-increment"].as<int32_t>()),
-                                     static_cast<uint32_t>(vm["term-DB-increment"].as<int32_t>()),
-                                     vm["clause-removal-ratio"].as<double>(),
-                                     vm["term-removal-ratio"].as<double>(),
-                                     vm["use-activity-threshold"].as<bool>(),
-                                     vm["constraint-activity-inc"].as<double>());
-    solver->constraint_database = &constraint_database;
-    VariableDataStore variable_data_store(*solver);
-    solver->variable_data_store = &variable_data_store;
-    DependencyManagerWatched dependency_manager(*solver, vm["prefix-mode"].as<bool>());
-    solver->dependency_manager = &dependency_manager;
-    DecisionHeuristic* decision_heuristic;
-    if (vm["prefix-mode"].as<bool>()) {
-      decision_heuristic = new DecisionHeuristicVMTFprefix(*solver, vm["no-phase-saving"].as<bool>());
-    } else {
-      auto decision_heuristic_option = static_cast<DecisionHeuristic::DecisionHeuristicOption>(vm["decision-heuristic"].as<int>());
-      if (decision_heuristic_option == DecisionHeuristic::DecisionHeuristicOption::VMTF) {
-        decision_heuristic = new DecisionHeuristicVMTFdeplearn(*solver, vm["no-phase-saving"].as<bool>());
-      } else {
-        bool tiebreak_scores = false;
-        bool use_secondary_occurrences = false;
-        bool prefer_fewer_occurrences = false;
-        if (decision_heuristic_option == DecisionHeuristic::DecisionHeuristicOption::VSIDS_TIEBREAK_MORE_PRIMARY_OCCS) {
-          tiebreak_scores = true;
-        } else if (decision_heuristic_option == DecisionHeuristic::DecisionHeuristicOption::VSIDS_TIEBREAK_FEWER_PRIMARY_OCCS) {
-          tiebreak_scores = true;
-          prefer_fewer_occurrences = true;
-        } else if (decision_heuristic_option == DecisionHeuristic::DecisionHeuristicOption::VSIDS_TIEBREAK_MORE_SECONDARY_OCCS) {
-          tiebreak_scores = true;
-          use_secondary_occurrences = true;
-        } else if (decision_heuristic_option == DecisionHeuristic::DecisionHeuristicOption::VSIDS_TIEBREAK_FEWER_SECONDARY_OCCS) {
-          tiebreak_scores = true;
-          use_secondary_occurrences = true;
-          prefer_fewer_occurrences = true;
-        }
-        decision_heuristic = new DecisionHeuristicVSIDSdeplearn(*solver,
-                                                                vm["no-phase-saving"].as<bool>(),
-                                                                vm["var-activity-decay"].as<double>(),
-                                                                vm["var-activity-inc"].as<double>(),
-                                                                tiebreak_scores,
-                                                                use_secondary_occurrences,
-                                                                prefer_fewer_occurrences);
-      }
-    }
-    solver->decision_heuristic = decision_heuristic;
+  ConstraintDB constraint_database(*solver,
+                                    false,
+                                    std::stod(args["--constraint-activity-decay"].asString()), 
+                                    static_cast<uint32_t>(args["--initial-clause-DB-size"].asLong()),
+                                    static_cast<uint32_t>(args["--initial-term-DB-size"].asLong()),
+                                    static_cast<uint32_t>(args["--clause-DB-increment"].asLong()),
+                                    static_cast<uint32_t>(args["--term-DB-increment"].asLong()),
+                                    std::stod(args["--clause-removal-ratio"].asString()),
+                                    std::stod(args["--term-removal-ratio"].asString()),
+                                    args["--use-activity-threshold"].asBool(),
+                                    std::stod(args["--constraint-activity-inc"].asString()),
+                                    static_cast<uint32_t>(args["--LBD-threshold"].asLong())
+                                    );
+  solver->constraint_database = &constraint_database;
+  DebugHelper debug_helper(*solver);
+  solver->debug_helper = &debug_helper;
+  VariableDataStore variable_data_store(*solver);
+  solver->variable_data_store = &variable_data_store;
+  DependencyManagerWatched dependency_manager(*solver, args["--dependency-learning"].asString());
+  solver->dependency_manager = &dependency_manager;
+  unique_ptr<DecisionHeuristic> decision_heuristic;
 
-    if (!vm["phase-heuristic"].defaulted()) {
-      string phase_string = vm["phase-heuristic"].as<string>();
-      DecisionHeuristic::PhaseHeuristicOption phase_heuristic;
-      if (phase_string == "qtype") {
-        phase_heuristic = DecisionHeuristic::PhaseHeuristicOption::QTYPE;
-      } else if (phase_string == "watcher") {
-        phase_heuristic = DecisionHeuristic::PhaseHeuristicOption::WATCHER;
-      } else if (phase_string == "random") {
-        phase_heuristic = DecisionHeuristic::PhaseHeuristicOption::RANDOM;
-      } else if (phase_string == "false") {
-        phase_heuristic = DecisionHeuristic::PhaseHeuristicOption::PHFALSE;
-      } else if (phase_string == "true") {
-        phase_heuristic = DecisionHeuristic::PhaseHeuristicOption::PHTRUE;
-      } else {
-        phase_heuristic = DecisionHeuristic::PhaseHeuristicOption::INVJW;
-      }
-      decision_heuristic->setPhaseHeuristic(phase_heuristic);
-    }
+if (args["--dependency-learning"].asString() == "off") {
+  decision_heuristic = make_unique<DecisionHeuristicVMTFprefix>(*solver, args["--no-phase-saving"].asBool());
+} else if (args["--decision-heuristic"].asString() == "VMTF") {
+  decision_heuristic = make_unique<DecisionHeuristicVMTFdeplearn>(*solver, args["--no-phase-saving"].asBool());
+} else if (args["--decision-heuristic"].asString() == "VSIDS") {
+  bool tiebreak_scores;
+  bool use_secondary_occurrences;
+  bool prefer_fewer_occurrences;
+  if (args["--tiebreak"].asString() == "arbitrary") {
+    tiebreak_scores = false;
+  } else if (args["--tiebreak"].asString() == "more-primary") {
+    tiebreak_scores = true;
+    use_secondary_occurrences = false;
+    prefer_fewer_occurrences = false;
+  } else if (args["--tiebreak"].asString() == "fewer-primary") {
+    tiebreak_scores = true;
+    use_secondary_occurrences = false;
+    prefer_fewer_occurrences = true;
+  } else if (args["--tiebreak"].asString() == "more-secondary") {
+    tiebreak_scores = true;
+    use_secondary_occurrences = true;
+    prefer_fewer_occurrences = false;
+  } else if (args["--tiebreak"].asString() == "fewer-secondary") {
+    tiebreak_scores = true;
+    use_secondary_occurrences = true;
+    prefer_fewer_occurrences = true;
+  } else {
+    assert(false);
+  }
+  decision_heuristic = make_unique<DecisionHeuristicVSIDSdeplearn>(*solver,
+                                                          args["--no-phase-saving"].asBool(),
+                                                          std::stod(args["--var-activity-decay"].asString()),
+                                                          std::stod(args["--var-activity-inc"].asString()),
+                                                          tiebreak_scores,
+                                                          use_secondary_occurrences,
+                                                          prefer_fewer_occurrences);
+  } else if (args["--decision-heuristic"].asString() == "SGDB") {
+    decision_heuristic = make_unique<DecisionHeuristicSGDB>(*solver,
+                                                    args["--no-phase-saving"].asBool(),
+                                                    std::stod(args["--initial-learning-rate"].asString()),
+                                                    std::stod(args["--learning-rate-decay"].asString()),
+                                                    std::stod(args["--learning-rate-minimum"].asString()),
+                                                    std::stod(args["--lambda-factor"].asString()));
+  } else {
+    assert(false);
+  }
+  solver->decision_heuristic = decision_heuristic.get();
 
-    RestartScheduler* restart_scheduler;
-    if (vm["no-restarts"].as<bool>()) {
-      restart_scheduler = new RestartSchedulerNone; // Use dummy Restart Scheduler.
-    } else {
-      restart_scheduler = new RestartSchedulerInnerOuter(static_cast<uint32_t>(vm["inner-restart-distance"].as<int32_t>()), static_cast<uint32_t>(vm["outer-restart-distance"].as<int32_t>()), vm["restart-multiplier"].as<double>());
-    }
-    solver->restart_scheduler = restart_scheduler;
-    StandardLearningEngine learning_engine(*solver);
-    solver->learning_engine = &learning_engine;
-    WatchedLiteralPropagator propagator(*solver);
-    solver->propagator = &propagator;
+  DecisionHeuristic::PhaseHeuristicOption phase_heuristic = DecisionHeuristic::PhaseHeuristicOption::PHFALSE;
+  if (args["--phase-heuristic"].asString() == "qtype") {
+    phase_heuristic = DecisionHeuristic::PhaseHeuristicOption::QTYPE;
+  } else if (args["--phase-heuristic"].asString() == "watcher") {
+    phase_heuristic = DecisionHeuristic::PhaseHeuristicOption::WATCHER;
+  } else if (args["--phase-heuristic"].asString() == "random") {
+    phase_heuristic = DecisionHeuristic::PhaseHeuristicOption::RANDOM;
+  } else if (args["--phase-heuristic"].asString() == "false") {
+    phase_heuristic = DecisionHeuristic::PhaseHeuristicOption::PHFALSE;
+  } else if (args["--phase-heuristic"].asString() == "true") {
+    phase_heuristic = DecisionHeuristic::PhaseHeuristicOption::PHTRUE;
+  } else if (args["--phase-heuristic"].asString() == "invJW") {
+    phase_heuristic = DecisionHeuristic::PhaseHeuristicOption::INVJW;
+  } else {
+    assert(false);
+  }
+  decision_heuristic->setPhaseHeuristic(phase_heuristic);
 
-    logging::core::get()->set_filter
-    (
-      logging::trivial::severity >= logging::trivial::error
+  unique_ptr<RestartScheduler> restart_scheduler;
+
+  if (args["--restarts"].asString() == "off") {
+    restart_scheduler = make_unique<RestartSchedulerNone>();
+  } else if (args["--restarts"].asString() == "inner-outer") {
+    restart_scheduler = make_unique<RestartSchedulerInnerOuter>(
+      static_cast<uint32_t>(args["--inner-restart-distance"].asLong()),
+      static_cast<uint32_t>(args["--outer-restart-distance"].asLong()),
+      std::stod(args["--restart-multiplier"].asString())
     );
+  } else if (args["--restarts"].asString() == "luby") {
+    restart_scheduler = make_unique<RestartSchedulerLuby>(static_cast<uint32_t>(args["--luby-restart-multiplier"].asLong()));
+  } else if (args["--restarts"].asString() == "EMA") {
+    restart_scheduler = make_unique<RestartSchedulerEMA>(
+      std::stod(args["--alpha"].asString()),
+      static_cast<uint32_t>(args["--minimum-distance"].asLong()),
+      std::stod(args["--threshold-factor"].asString())
+    );
+  } else {
+    assert(false);
+  }
 
-    Parser parser(*solver, vm["model-generation"].as<bool>());
+  solver->restart_scheduler = restart_scheduler.get();
+  StandardLearningEngine learning_engine(*solver);
+  solver->learning_engine = &learning_engine;
+  WatchedLiteralPropagator propagator(
+    *solver, 
+    args["--model-generation"].asString() == "weighted",
+    std::stod(args["--exponent"].asString()),
+    std::stod(args["--scaling-factor"].asString()),
+    std::stod(args["--universal-penalty"].asString())
+  );
+  
+  solver->propagator = &propagator;
 
-    logging::add_common_attributes();
+  Parser parser(*solver, args["--model-generation"].asString() != "off");
 
-    auto fmtTimeStamp = logging::expressions::format_date_time<boost::posix_time::ptime>("TimeStamp", "%Y-%m-%d %H:%M:%S");
-    auto fmtSeverity = logging::expressions::attr<logging::trivial::severity_level>("Severity");
-    logging::formatter logFmt = logging::expressions::format("[%1%] [%2%] %3%") % fmtTimeStamp % fmtSeverity % logging::expressions::smessage;
-
-    /* console sink */
-    auto consoleSink = logging::add_console_log(std::clog);
-    consoleSink->set_formatter(logFmt);
-
-    if (vm.count("input-file")) {
-      string filename = vm["input-file"].as<string>();
-    	ifstream ifs(filename);
-      if (!ifs.is_open()) {
-        cerr << "qute: cannot access '" << filename << "': no such file or directory \n";
-        return 2;
-      } else {
-        parser.readAUTO(ifs);
-        ifs.close();
-      }
-    }
-    else {
-      parser.readAUTO();
-    }
-
-    if (vm["verbose"].as<bool>()) {
-      logging::core::get()->set_filter
-      (
-        logging::trivial::severity >= logging::trivial::info
-      );
-    }
-
-    // Register signal handler
-    std::signal(SIGTERM, signal_handler);
-    std::signal(SIGINT, signal_handler);
-
-    lbool result = solver->solve();
-
-    if (vm["partial-certificate"].as<bool>() && result != l_Undef && !learning_engine.reducedLast().empty()) {
-      // Preamble for output according to QDIMACS
-      // cout << "s cnf " << static_cast<int>(result) << " " << parser.getVarsPreamble() << " " << parser.getClausesPreamble() << "\n";
-      cout << "v " << learning_engine.reducedLast() << "0\n";
-    }
-
-    if (vm["print-stats"].as<bool>()) {
-      solver->printStatistics();
-    }
-
-    delete solver;
-    delete restart_scheduler;
-    delete decision_heuristic;
-
-    switch (result) {
-      case l_True:
-        cout << "SAT\n";
-        return 10;
-      case l_False:
-        cout << "UNSAT\n";
-        return 20;
-      default:
-        cout << "UNDEF\n";
-        return 0;
+  // PARSER
+  if (args["<path>"]) {
+    string filename = args["<path>"].asString();
+  	ifstream ifs(filename);
+    if (!ifs.is_open()) {
+      cerr << "qute: cannot access '" << filename << "': no such file or directory \n";
+      return 2;
+    } else {
+      parser.readAUTO(ifs);
+      ifs.close();
     }
   }
-  catch (const program_options::error &ex) {
-    cerr << "Error: " << ex.what() << ".\n\n";
-    cout << "Usage: qute FILENAME [Options] \n\n";
-    cout << generic << "\n";
-    return 1;
+  else {
+    parser.readAUTO();
+  }
+
+  // LOGGING
+  if (args["--verbose"].asBool()) {
+    Logger::get().setOutputLevel(Loglevel::info);
+  }
+
+  // Register signal handler
+  std::signal(SIGTERM, signal_handler);
+  std::signal(SIGINT, signal_handler);
+
+  lbool result = solver->solve();
+
+  if (args["--partial-certificate"].asBool() && ((result == l_True && !solver->variable_data_store->varType(1)) ||
+                                                 (result == l_False && solver->variable_data_store->varType(1)))) {
+    cout << learning_engine.reducedLast() << "\n";
+  }
+
+  if (args["--print-stats"].asBool()) {
+    solver->printStatistics();
+  }
+
+  if (result == l_True) {
+    cout << "SAT\n";
+    return 10;
+  } else if (result == l_False) {
+    cout << "UNSAT\n";
+    return 20;
+  } else {
+    cout << "UNDEF\n";
+    return 0;
   }
 }

@@ -9,12 +9,18 @@ namespace Qute {
 class RestartSchedulerNone: public RestartScheduler {
 
 public:
-  virtual bool notifyConflict(ConstraintType constraint_type);
+  virtual void notifyConflict(ConstraintType constraint_type);
+  virtual void notifyLearned(Constraint& c);
+  virtual bool restart();
 
 };
 
 // Implementation of inline methods.
-inline bool RestartSchedulerNone::notifyConflict(ConstraintType constraint_type) {
+inline void RestartSchedulerNone::notifyConflict(ConstraintType constraint_type) {}
+
+inline void RestartSchedulerNone::notifyLearned(Constraint& c) {}
+
+inline bool RestartSchedulerNone::restart() {
   return false;
 }
 

@@ -20,7 +20,7 @@ public:
   virtual void notifyAssigned(Literal l);
   virtual void notifyEligible(Variable v);
   virtual void notifyUnassigned(Literal l);
-  virtual void notifyLearned(Constraint& c);
+  virtual void notifyLearned(Constraint& c, ConstraintType constraint_type, vector<Literal>& conflict_side_literals);
   virtual void notifyBacktrack(uint32_t decision_level_before);
   virtual Literal getDecisionLiteral();
 
@@ -53,7 +53,6 @@ protected:
     CompareVariables(vector<ListEntry>& decision_list): decision_list(decision_list) {}
   };
 
-  vector<lbool> saved_phase;
   vector<ListEntry> decision_list;
   vector<uint32_t> variable_depth;
   vector<VMTFMetadata> vmtf_data_for_block;

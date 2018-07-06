@@ -3,11 +3,13 @@
 
 #include <vector>
 #include <unordered_set>
+#include <string>
 #include "dependency_manager.hh"
 #include "qcdcl.hh"
 
 using std::vector;
 using std::unordered_set;
+using std::string;
 
 namespace Qute {
 
@@ -15,9 +17,10 @@ class DependencyManagerWatched: public DependencyManager {
 
 friend class DecisionHeuristicVMTFdeplearn;
 friend class DecisionHeuristicVSIDSdeplearn;
+friend class DecisionHeuristicSGDB;
 
 public:
-  DependencyManagerWatched(QCDCL_solver& solver, bool prefix_mode);
+  DependencyManagerWatched(QCDCL_solver& solver, string dependency_learning_strategy);
   virtual void addVariable(bool auxiliary);
   virtual void addDependency(Variable of, Variable on);
   virtual void notifyStart();
@@ -25,8 +28,13 @@ public:
   virtual void notifyUnassigned(Variable v);
   virtual bool isDecisionCandidate(Variable v) const;
   virtual bool dependsOn(Variable of, Variable on) const;
+  virtual void learnDependencies(Variable unit_variable, vector<Literal>& literal_vector);
 
 protected:
+  void (DependencyManagerWatched::*learnDependenciesPtr)(Variable unit_variable, vector<Literal>& literal_vector);
+  void learnAllDependencies(Variable unit_variable, vector<Literal>& literal_vector);
+  void learnOutermostDependency(Variable unit_variable, vector<Literal>& literal_vector);
+  void learnDependencyWithFewestDependencies(Variable unit_variable, vector<Literal>& literal_vector);
   Variable watcher(Variable v) const;
   bool findWatchedDependency(Variable v, bool remove_from_old);
   void setWatchedDependency(Variable variable, Variable new_watched, bool remove_from_old);
@@ -67,6 +75,10 @@ inline bool DependencyManagerWatched::dependsOn(Variable of, Variable on) const 
   } else {
     return variable_dependencies[of - 1].dependent_on.find(on) != variable_dependencies[of - 1].dependent_on.end();
   }
+}
+
+inline void DependencyManagerWatched::learnDependencies(Variable unit_variable, vector<Literal>& literal_vector) {
+  (*this.*learnDependenciesPtr)(unit_variable, literal_vector);
 }
 
 inline Variable DependencyManagerWatched::watcher(Variable v) const {

@@ -1,9 +1,53 @@
-#include <boost/log/trivial.hpp>
 #include "dependency_manager_watched.hh"
+#include "logging.hh"
 
 namespace Qute {
 
-DependencyManagerWatched::DependencyManagerWatched(QCDCL_solver& solver, bool prefix_mode): solver(solver), prefix_mode(prefix_mode) {}
+DependencyManagerWatched::DependencyManagerWatched(QCDCL_solver& solver, string dependency_learning_strategy): learnDependenciesPtr(nullptr), solver(solver), prefix_mode(false) {
+  if (dependency_learning_strategy == "off") {
+    prefix_mode = true;
+  } else if (dependency_learning_strategy == "all") {
+    learnDependenciesPtr = &DependencyManagerWatched::learnAllDependencies;
+  } else if (dependency_learning_strategy == "outermost") {
+    learnDependenciesPtr = &DependencyManagerWatched::learnOutermostDependency;
+  } else if (dependency_learning_strategy == "fewest") {
+    learnDependenciesPtr = &DependencyManagerWatched::learnDependencyWithFewestDependencies;
+  }
+}
+
+void DependencyManagerWatched::learnAllDependencies(Variable unit_variable, vector<Literal>& literal_vector) {
+  for (Literal l : literal_vector) {
+    addDependency(unit_variable, var(l));
+    solver.solver_statistics.nr_dependencies++;
+  }
+}
+
+void DependencyManagerWatched::learnOutermostDependency(Variable unit_variable, vector<Literal>& literal_vector) {
+  assert(!literal_vector.empty());
+  Variable outermost = solver.variable_data_store->lastVariable() + 1;
+  for (Literal l : literal_vector) {
+    if (outermost > var(l)) {
+      outermost = var(l);
+    }
+  }
+  addDependency(unit_variable, outermost);
+  solver.solver_statistics.nr_dependencies++;
+}
+
+void DependencyManagerWatched::learnDependencyWithFewestDependencies(Variable unit_variable, vector<Literal>& literal_vector) {
+  uint32_t fewest_deps = solver.variable_data_store->lastVariable() + 1;
+  Variable variable_with_fewest_deps = 0;
+  for (Literal l : literal_vector) {
+    Variable current_var = var(l);
+    uint32_t current_deps = variable_dependencies[current_var - 1].dependent_on.size();
+    if (current_deps < fewest_deps) {
+       variable_with_fewest_deps = current_var;
+       fewest_deps = current_deps;
+    }
+  }
+  addDependency(unit_variable, variable_with_fewest_deps);
+  solver.solver_statistics.nr_dependencies++;
+}
 
 void DependencyManagerWatched::notifyAssigned(Variable v) {
   /* After "variable" is assigned, we must find new watchers for variables that
@@ -31,7 +75,8 @@ void DependencyManagerWatched::notifyAssigned(Variable v) {
 
 void DependencyManagerWatched::addDependency(Variable of, Variable on) {
   if (!dependsOn(of, on)) {
-    //BOOST_LOG_TRIVIAL(trace) << "Dependency added: (" << of << ", " << on << ")";
+    LOG(trace) << "Dependency added: (" << of << ", " << on << ")" << std::endl;
+    solver.solver_statistics.nr_dependencies++;
     variable_dependencies[of - 1].dependent_on.insert(on);
     variable_dependencies[of - 1].dependent_on_vector.push_back(on);
     /* If the current watched dependency is 0 or a variable that is assigned,

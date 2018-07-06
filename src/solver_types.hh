@@ -38,7 +38,7 @@ typedef int8_t lbool;
 
 const lbool l_False = 0;
 const lbool l_True = 1;
-const lbool l_Undef = -1;
+const lbool l_Undef = 2;
 
 enum ConstraintType: unsigned short { clauses = 0, terms = 1 };
 const vector<ConstraintType> constraint_types = {ConstraintType::clauses, ConstraintType::terms};
@@ -49,7 +49,7 @@ struct Literal {
     int x;
 
     // Use this as a constructor:
-    //friend Literal mkLiteral(Variable var, bool sign = false);
+    friend Literal mkLiteral(Variable var, bool sign = false);
 
     bool operator == (Literal p) const { return x == p.x; }
     bool operator != (Literal p) const { return x != p.x; }
@@ -57,7 +57,7 @@ struct Literal {
     bool operator <= (Literal p) const { return x <= p.x;  }
 };
 
-inline  Literal  mkLiteral (Variable var, bool sign = false) { Literal p; p.x = var + var + (int)sign; return p; }
+inline  Literal  mkLiteral     (Variable var, bool sign) { Literal p; p.x = var + var + (int)sign; return p; }
 inline  Literal  operator ~(Literal p)              { Literal q; q.x = p.x ^ 1; return q; }
 inline  Literal  operator ^(Literal p, bool b)      { Literal q; q.x = p.x ^ (unsigned int)b; return q; }
 inline  bool sign      (Literal p)              { return p.x & 1; }

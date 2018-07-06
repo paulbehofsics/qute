@@ -14,6 +14,7 @@ public:
   //virtual void removeConstraint(CRef constraint_reference, ConstraintType constraint_type) = 0;
   virtual void notifyAssigned(Literal l) = 0;
   virtual void notifyBacktrack(uint32_t decision_level_before) = 0;
+  virtual void notifyStart() = 0;
   virtual void relocConstraintReferences(ConstraintType constraint_type) = 0;
 
 };

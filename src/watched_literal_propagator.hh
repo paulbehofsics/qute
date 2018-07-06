@@ -3,7 +3,6 @@
 
 #include <vector>
 #include <algorithm>
-#include <boost/log/trivial.hpp>
 #include "propagator.hh"
 #include "solver_types.hh"
 #include "qcdcl.hh"
@@ -16,13 +15,13 @@ class WatchedLiteralPropagator: public Propagator {
   friend class DecisionHeuristic;
 
 public:
-  WatchedLiteralPropagator(QCDCL_solver& solver);
+  WatchedLiteralPropagator(QCDCL_solver& solver, bool model_generation_approx_hs, double exponent, double scaling_factor, double universal_penalty);
   virtual void addVariable();
   virtual CRef propagate(ConstraintType& constraint_type);
   virtual void addConstraint(CRef constraint_reference, ConstraintType constraint_type);
-  //virtual void removeConstraint(CRef constraint_reference, ConstraintType constraint_type);
   virtual void notifyAssigned(Literal l);
   virtual void notifyBacktrack(uint32_t decision_level_before);
+  virtual void notifyStart();
   virtual void relocConstraintReferences(ConstraintType constraint_type);
 
 protected:
@@ -34,26 +33,26 @@ protected:
   bool disablesConstraint(Literal literal, ConstraintType constraint_type);
   bool propagateUnwatched(CRef constraint_reference, ConstraintType constraint_type, bool& watchers_found);
   bool isDisabled(Constraint& constraint, ConstraintType constraint_type);
-  bool vanishes(Literal literal, ConstraintType constraint_type);
   bool isUnassignedPrimary(Literal literal, ConstraintType constraint_type);
   bool isBlockedSecondary(Literal literal, ConstraintType constraint_type, Literal primary);
   bool updateWatchedLiterals(Constraint& constraint, CRef constraint_reference, ConstraintType constraint_type, bool& watcher_changed);
-  bool isUnit(Constraint& constraint, ConstraintType constraint_type);
-  bool isEmpty(Constraint& constraint, ConstraintType constraint_type);
   bool propagationCorrect();
+  Literal findDisabling(Constraint& constraint, ConstraintType constraint_type, bool variable_type);
+
+  void (WatchedLiteralPropagator::*generateModel)(vector<Literal>& model);
+  void generateModelSimple(vector<Literal>& model);
+  void generateModelApproxHittingSet(vector<Literal>& model);
 
   struct WatchedRecord
   {
     CRef constraint_reference;
     Literal blocker;
-    //bool is_binary: 1;
 
     WatchedRecord(CRef constraint_reference, Literal blocker): constraint_reference(constraint_reference), blocker(blocker) {}
 
     WatchedRecord& operator=(const WatchedRecord& other) {
       constraint_reference = other.constraint_reference;
       blocker = other.blocker;
-      //is_binary = other.is_binary;
       return *this;
     }
   };
@@ -63,6 +62,10 @@ protected:
   vector<Literal> propagation_queue;
   vector<vector<WatchedRecord>> constraints_watched_by[2];
   vector<CRef> constraints_without_two_watchers[2];
+  double exponent;
+  double scaling_factor;
+  double universal_penalty;
+  vector<double> variable_weights;
 
 };
 

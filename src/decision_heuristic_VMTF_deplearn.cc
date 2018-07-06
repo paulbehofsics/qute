@@ -44,7 +44,7 @@ void DecisionHeuristicVMTFdeplearn::notifyUnassigned(Literal l) {
   }
 }
 
-void DecisionHeuristicVMTFdeplearn::notifyLearned(Constraint& c) {
+void DecisionHeuristicVMTFdeplearn::notifyLearned(Constraint& c, ConstraintType constraint_type, vector<Literal>& conflict_side_literals) {
   // Bump every assigned variable in the learned constraint.
   for (Literal l: c) {
     Variable v = var(l);

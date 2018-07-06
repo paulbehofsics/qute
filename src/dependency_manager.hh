@@ -16,6 +16,7 @@ public:
   virtual void notifyUnassigned(Variable v) = 0;
   virtual bool isDecisionCandidate(Variable v) const = 0;
   virtual bool dependsOn(Variable of, Variable on) const = 0;
+  virtual void learnDependencies(Variable unit_variable, vector<Literal>& literal_vector) = 0;
 
 };
 

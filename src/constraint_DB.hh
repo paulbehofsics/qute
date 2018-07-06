@@ -1,7 +1,6 @@
 #ifndef constraint_DB_hh
 #define constraint_DB_hh
 
-#include <boost/log/trivial.hpp>
 #include <vector>
 #include <iostream>
 #include <unordered_map>
@@ -9,6 +8,7 @@
 #include "solver_types.hh"
 #include "constraint.hh"
 #include "qcdcl.hh"
+#include "logging.hh"
 
 using std::vector;
 using std::unordered_map;
@@ -21,7 +21,7 @@ class QCDCL_solver;
 class ConstraintDB {
 
 public:
-  ConstraintDB(QCDCL_solver& solver, bool print_trace, double constraint_activity_decay, uint32_t max_learnt_clauses, uint32_t max_learnt_terms, uint32_t learnt_clauses_increment, uint32_t learnt_terms_increment, double clause_removal_ratio, double term_removal_ratio, bool use_activity_threshold, double constraint_increment);
+  ConstraintDB(QCDCL_solver& solver, bool print_trace, double constraint_activity_decay, uint32_t max_learnt_clauses, uint32_t max_learnt_terms, uint32_t learnt_clauses_increment, uint32_t learnt_terms_increment, double clause_removal_ratio, double term_removal_ratio, bool use_activity_threshold, double constraint_increment, uint32_t LBD_threshold);
   CRef addConstraint(vector<Literal>& literals, ConstraintType constraint_type, bool learnt);
   Constraint& getConstraint(CRef constraint_reference, ConstraintType constraint_type);
   vector<CRef>::const_iterator constraintReferencesBegin(ConstraintType constraint_type, bool learnt);
@@ -66,6 +66,7 @@ protected:
   uint32_t learnts_increment[2];
   ConstraintAllocator* ca_to;
   bool use_activity_threshold;
+  uint32_t LBD_threshold;
 };
 
 // Implementation of inline methods.
@@ -102,7 +103,7 @@ inline void ConstraintDB::notifyStart() {}
 inline void ConstraintDB::notifyConflict(ConstraintType constraint_type) {
   decayConstraintActivity(constraint_type);
   if (learnt_constraint_references[constraint_type].size() >= learnts_max[constraint_type]) {
-    BOOST_LOG_TRIVIAL(info) << "Reached learnt " << (constraint_type ? "term ": "clause ") << "limit of " << learnts_max[constraint_type] << ".";
+    LOG(info) << "Reached learnt " << (constraint_type ? "term ": "clause ") << "limit of " << learnts_max[constraint_type] << "." << std::endl;
     learnts_max[constraint_type] += learnts_increment[constraint_type];
     cleanConstraints(constraint_type);
   }

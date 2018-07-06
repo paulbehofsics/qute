@@ -2,7 +2,6 @@
 #define qcdcl_hh
 
 #include <vector>
-#include <boost/log/trivial.hpp>
 #include <iostream>
 #include <algorithm>
 
@@ -15,6 +14,8 @@
 #include "dependency_manager_watched.hh"
 #include "restart_scheduler.hh"
 #include "standard_learning_engine.hh"
+#include "debug_helper.hh"
+#include "logging.hh"
 
 using std::vector;
 using std::cout;
@@ -29,6 +30,7 @@ class WatchedLiteralPropagator;
 class StandardLearningEngine;
 class VariableDataStore;
 class ConstraintDB;
+class DebugHelper;
 
 class QCDCL_solver: public PCNFContainer {
 
@@ -53,6 +55,7 @@ public:
   DependencyManagerWatched* dependency_manager;
   RestartScheduler* restart_scheduler;
   StandardLearningEngine* learning_engine;
+  DebugHelper* debug_helper;
 
   struct SolverStats
   {
@@ -87,7 +90,7 @@ inline void QCDCL_solver::printStatistics() {
   cout << "Number of learned tautological clauses: " << solver_statistics.learned_tautological[false] <<  "\n";
   cout << "Number of learned terms: " << solver_statistics.learned_total[true] << "\n";
   cout << "Number of learned contradictory terms: " << solver_statistics.learned_tautological[true] << "\n";
-  if (solver_statistics.nr_decisions) {
+  if (solver_statistics.nr_assignments) {
     cout << "Fraction of decisions among assignments: " << double(solver_statistics.nr_decisions) / double(solver_statistics.nr_assignments) << "\n";
   }
   cout << "Number of backtracks: " << solver_statistics.backtracks_total << "\n";

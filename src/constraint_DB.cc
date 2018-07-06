@@ -2,7 +2,7 @@
 
 namespace Qute {
 
-ConstraintDB::ConstraintDB(QCDCL_solver& solver, bool print_trace, double constraint_activity_decay, uint32_t max_learnt_clauses, uint32_t max_learnt_terms, uint32_t learnt_clauses_increment, uint32_t learnt_terms_increment, double clause_removal_ratio, double term_removal_ratio, bool use_activity_threshold, double constraint_increment): removal_ratio{clause_removal_ratio, term_removal_ratio}, solver(solver), print_trace(print_trace), constraints{ConstraintAllocator(print_trace), ConstraintAllocator(print_trace)}, constraint_inc{constraint_increment, constraint_increment}, constraint_activity_decay(constraint_activity_decay), learnts_max{max_learnt_clauses, max_learnt_terms}, learnts_increment{learnt_clauses_increment, learnt_terms_increment}, ca_to(nullptr), use_activity_threshold(use_activity_threshold) {}
+ConstraintDB::ConstraintDB(QCDCL_solver& solver, bool print_trace, double constraint_activity_decay, uint32_t max_learnt_clauses, uint32_t max_learnt_terms, uint32_t learnt_clauses_increment, uint32_t learnt_terms_increment, double clause_removal_ratio, double term_removal_ratio, bool use_activity_threshold, double constraint_increment, uint32_t LBD_threshold): removal_ratio{clause_removal_ratio, term_removal_ratio}, solver(solver), print_trace(print_trace), constraints{ConstraintAllocator(print_trace), ConstraintAllocator(print_trace)}, constraint_inc{constraint_increment, constraint_increment}, constraint_activity_decay(constraint_activity_decay), learnts_max{max_learnt_clauses, max_learnt_terms}, learnts_increment{learnt_clauses_increment, learnt_terms_increment}, ca_to(nullptr), use_activity_threshold(use_activity_threshold), LBD_threshold(LBD_threshold) {}
 
 CRef ConstraintDB::addConstraint(vector<Literal>& literals, ConstraintType constraint_type, bool learnt) {
   CRef constraint_reference = constraints[constraint_type].alloc(literals, learnt);
@@ -11,14 +11,13 @@ CRef ConstraintDB::addConstraint(vector<Literal>& literals, ConstraintType const
     Constraint& constraint = getConstraint(constraint_reference, constraint_type);
     updateLBD(constraint);
     bumpConstraintActivity(constraint, constraint_type);
-    solver.decision_heuristic->notifyLearned(constraint);
   } else {
     input_constraint_references[constraint_type].push_back(constraint_reference);
     for (Literal l: literals) {
       literal_occurrences[constraint_type][l].push_back(constraint_reference);
     }
   }
-  BOOST_LOG_TRIVIAL(trace) << (learnt ? "Learnt ": "Input ") << (constraint_type ? "term": "clause") << ": " << constraints[constraint_type][constraint_reference];
+  LOG(trace) << (learnt ? "Learnt ": "Input ") << (constraint_type ? "term": "clause") << ": " << constraints[constraint_type][constraint_reference] << std::endl;
   return constraint_reference;
 }
 
@@ -78,14 +77,15 @@ void ConstraintDB::cleanConstraints(ConstraintType constraint_type) {
   double threshold = constraint_inc[constraint_type] / learnt_constraint_references[constraint_type].size();
   for (CRef constraint_reference: learnt_constraint_references[constraint_type]) {
     Constraint& constraint = constraints[constraint_type][constraint_reference];
-    if (!isLocked(constraint, constraint_reference, constraint_type) && constraint.LBD() > 2 &&
+    if (!isLocked(constraint, constraint_reference, constraint_type) &&
+        (constraint.LBD() > LBD_threshold) &&
         (removed_counter < to_remove || (use_activity_threshold && constraint.activity() < threshold))) {
       constraint.mark();
       constraints[constraint_type].free(constraint_reference);
       removed_counter++;
     }
   }
-  BOOST_LOG_TRIVIAL(info) << "Removed " << removed_counter << " learnt " << (constraint_type ? "terms": "clauses") << ".";
+  LOG(info) << "Removed " << removed_counter << " learnt " << (constraint_type ? "terms": "clauses") << "." << std::endl;
   relocAll(constraint_type);
 }
 

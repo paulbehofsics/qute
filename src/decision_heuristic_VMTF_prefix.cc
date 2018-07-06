@@ -58,7 +58,7 @@ void DecisionHeuristicVMTFprefix::notifyUnassigned(Literal l) {
   }
 }
 
-void DecisionHeuristicVMTFprefix::notifyLearned(Constraint& c) {
+void DecisionHeuristicVMTFprefix::notifyLearned(Constraint& c, ConstraintType constraint_type, vector<Literal>& conflict_side_literals) {
   // Bump every assigned variable in the learned constraint.
   for (Literal l: c) {
     Variable v = var(l);

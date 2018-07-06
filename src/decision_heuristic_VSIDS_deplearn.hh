@@ -1,13 +1,16 @@
 #ifndef decision_heuristic_vsids_deplearn_hh
 #define decision_heuristic_vsids_deplearn_hh
 
-#include <boost/heap/binomial_heap.hpp>
 #include "qcdcl.hh"
 #include "solver_types.hh"
 #include "constraint.hh"
 
-using namespace boost::heap;
-using std::priority_queue;
+#include "minisat/mtl/Heap.h"
+#include "minisat/mtl/IntMap.h"
+
+using std::find;
+using Minisat::Heap;
+using Minisat::IntMap;
 
 namespace Qute {
 
@@ -20,7 +23,7 @@ public:
   virtual void notifyAssigned(Literal l);
   virtual void notifyUnassigned(Literal l);
   virtual void notifyEligible(Variable v);
-  virtual void notifyLearned(Constraint& c);
+  virtual void notifyLearned(Constraint& c, ConstraintType constraint_type, vector<Literal>& conflict_side_literals);
   virtual void notifyBacktrack(uint32_t decision_level_before);
   virtual Literal getDecisionLiteral();
 
@@ -35,74 +38,60 @@ protected:
   void popVariableWithTopScore(Variable v);
   Variable pickVarUsingOccurrences(vector<Variable>& candidates, bool prefer_fewer_occurrences);
 
-  struct VariableNode {
-    Variable v;
-    double activity;
-    uint32_t occurrences;
-    VariableNode(Variable v, double activity, uint32_t occurrences): v(v), activity(activity), occurrences(occurrences) {}
-  };
-
   struct CompareVariables
   {
-    CompareVariables(bool tiebreak_scores, bool prefer_fewer_occurrences): tiebreak_scores(tiebreak_scores), prefer_fewer_occurrences(prefer_fewer_occurrences) {}
-    bool operator()(const VariableNode& first, const VariableNode& second) const {
+    CompareVariables(const IntMap<Variable, double>& variable_activity, const IntMap<Variable, int>& nr_literal_occurrences, bool tiebreak_scores, bool prefer_fewer_occurrences): tiebreak_scores(tiebreak_scores), prefer_fewer_occurrences(prefer_fewer_occurrences), variable_activity(variable_activity), nr_literal_occurrences(nr_literal_occurrences) {}
+    bool operator()(const Variable first, const Variable second) const {
       if (!tiebreak_scores) {
-        return first.activity < second.activity;
+        return variable_activity[first] > variable_activity[second];
       } else if (prefer_fewer_occurrences) {
-        return (first.activity < second.activity) || (first.activity == second.activity && first.occurrences < second.occurrences);
+        return (variable_activity[first] > variable_activity[second]) || (variable_activity[first] == variable_activity[second] && nr_literal_occurrences[first] < nr_literal_occurrences[second]);
       } else {
-        return (first.activity < second.activity) || (first.activity == second.activity && first.occurrences > second.occurrences);
+        return (variable_activity[first] > variable_activity[second]) || (variable_activity[first] == variable_activity[second] && nr_literal_occurrences[first] > nr_literal_occurrences[second]);
       }
     }
     bool tiebreak_scores;
     bool prefer_fewer_occurrences;
+    const IntMap<Variable, double>& variable_activity;
+    const IntMap<Variable, int>& nr_literal_occurrences;
   };
 
-  vector<double> variable_score;
-  binomial_heap<VariableNode,boost::heap::compare<CompareVariables>> variable_queue;
   vector<bool> is_auxiliary;
-  vector<bool> in_queue;
-  vector<binomial_heap<VariableNode,compare<CompareVariables>>::handle_type> handles;
   bool no_phase_saving;
-  vector<lbool> saved_phase;
   double score_decay_factor;
   double score_increment;
   uint32_t backtrack_decision_level_before;
-  vector<uint32_t> nr_literal_occurrences;
   bool tiebreak_scores;
   bool use_secondary_occurrences_for_tiebreaking;
-
+  IntMap<Variable, int> nr_literal_occurrences;
+  IntMap<Variable, double> variable_activity;
+  Heap<Variable,CompareVariables> variable_queue;
 };
 
 // Implementation of inline methods
 
 inline void DecisionHeuristicVSIDSdeplearn::precomputeVariableOccurrences(bool use_secondary_occurrences_for_tiebreaking) {
-  nr_literal_occurrences.resize(variable_score.size());
   for (Variable v = 1; v <= solver.variable_data_store->lastVariable(); v++) {
     if (!is_auxiliary[v - 1] && solver.dependency_manager->isDecisionCandidate(v)) {
       /* Existentials are 'primary' literals in clauses and 'secondary' in terms.
          Conversely, universals are 'primary' in terms and 'secondary' in clauses. */
       ConstraintType constraint_type = constraint_types[use_secondary_occurrences_for_tiebreaking ^ solver.variable_data_store->varType(v)];
-      nr_literal_occurrences[v - 1] = nrLiteralOccurrences(mkLiteral(v, true), constraint_type) + nrLiteralOccurrences(mkLiteral(v, false), constraint_type);
+      nr_literal_occurrences.insert(v, nrLiteralOccurrences(mkLiteral(v, true), constraint_type) + nrLiteralOccurrences(mkLiteral(v, false), constraint_type));
     }
   }
 }
 
 inline void DecisionHeuristicVSIDSdeplearn::addVariable(bool auxiliary) {
   saved_phase.push_back(l_Undef);
-  variable_score.push_back(0);
+  variable_activity.insert(solver.variable_data_store->lastVariable(), 0);
   is_auxiliary.push_back(auxiliary);
-  in_queue.push_back(false);
 }
 
 inline void DecisionHeuristicVSIDSdeplearn::notifyStart() {
-  handles.resize(variable_score.size());
   precomputeVariableOccurrences(use_secondary_occurrences_for_tiebreaking);
   for (Variable v = 1; v <= solver.variable_data_store->lastVariable(); v++) {
     if (!is_auxiliary[v - 1] && solver.dependency_manager->isDecisionCandidate(v)) {
-      uint32_t nr_occurrences = tiebreak_scores ? nr_literal_occurrences[v - 1] : 0;
-      handles[v - 1] = variable_queue.push(VariableNode(v, 0, nr_occurrences));
-      in_queue[v - 1] = true;
+      variable_queue.insert(v);
     }
   }
 }
@@ -112,14 +101,12 @@ inline void DecisionHeuristicVSIDSdeplearn::notifyAssigned(Literal l) {
 }
 
 inline void DecisionHeuristicVSIDSdeplearn::notifyEligible(Variable v) {
-  if (!in_queue[v - 1]) {
-    uint32_t nr_occurrences = tiebreak_scores ? nr_literal_occurrences[v - 1] : 0;
-    handles[v - 1] = variable_queue.push(VariableNode(v, variable_score[v - 1], nr_occurrences));
-    in_queue[v - 1] = true;
+  if (!is_auxiliary[v - 1]) {
+    variable_queue.update(v);
   }
 }
 
-inline void DecisionHeuristicVSIDSdeplearn::notifyLearned(Constraint& c) {
+inline void DecisionHeuristicVSIDSdeplearn::notifyLearned(Constraint& c, ConstraintType constraint_type, vector<Literal>& conflict_side_literals) {
   for (auto literal: c) {
     Variable v = var(literal);
     if (solver.variable_data_store->isAssigned(v) && !is_auxiliary[v - 1]) {
@@ -133,23 +120,17 @@ inline void DecisionHeuristicVSIDSdeplearn::notifyBacktrack(uint32_t decision_le
 }
 
 inline void DecisionHeuristicVSIDSdeplearn::bumpVariableScore(Variable v) {
-  variable_score[v - 1] += score_increment;
-  if (in_queue[v - 1]) {
-    (*handles[v - 1]).activity = variable_score[v - 1];
-    variable_queue.increase(handles[v - 1]);
-  }
-  if (variable_score[v - 1] > 1e60) {
+  variable_activity[v] += score_increment;
+  variable_queue.update(v);
+  if (variable_activity[v] > 1e60) {
     rescaleVariableScores();
   }
 }
 
 inline void DecisionHeuristicVSIDSdeplearn::rescaleVariableScores() {
   for (Variable v = 1; v <= solver.variable_data_store->lastVariable(); v++) {
-    variable_score[v] *= 1e-60;
-    if (in_queue[v - 1]) {
-      (*handles[v - 1]).activity = variable_score[v - 1];
-      variable_queue.decrease(handles[v - 1]);
-    }
+    variable_activity[v] *= 1e-60;
+    variable_queue.update(v);
   }
   score_increment *= 1e-60;
 }
@@ -160,18 +141,15 @@ inline void DecisionHeuristicVSIDSdeplearn::decayVariableScores() {
 
 inline Variable DecisionHeuristicVSIDSdeplearn::popFromVariableQueue() {
   assert(!variable_queue.empty());
-  VariableNode n = variable_queue.top();
-  variable_queue.pop();
-  in_queue[n.v - 1] = false;
-  return n.v;
+  return variable_queue.removeMin();
 }
 
 inline double DecisionHeuristicVSIDSdeplearn::getBestDecisionVariableScore() {
   bool assigned = false;
   double best_decision_variable_score;
   for (Variable v = 1; v <= solver.variable_data_store->lastVariable(); v++) {
-    if (((variable_score[v - 1] > best_decision_variable_score) || !assigned) && solver.dependency_manager->isDecisionCandidate(v)) {
-      best_decision_variable_score = variable_score[v - 1];
+    if (((variable_activity[v] > best_decision_variable_score) || !assigned) && solver.dependency_manager->isDecisionCandidate(v)) {
+      best_decision_variable_score = variable_activity[v];
       assigned = true;
     }
   }

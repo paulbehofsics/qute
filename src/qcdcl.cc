@@ -1,8 +1,9 @@
 #include "qcdcl.hh"
+#include "logging.hh"
 
 namespace Qute {
 
-QCDCL_solver::QCDCL_solver(): variable_data_store(nullptr), constraint_database(nullptr), propagator(nullptr), decision_heuristic(nullptr), dependency_manager(nullptr), restart_scheduler(nullptr), learning_engine(nullptr), interrupt_flag(false) {}
+QCDCL_solver::QCDCL_solver(): variable_data_store(nullptr), constraint_database(nullptr), propagator(nullptr), decision_heuristic(nullptr), dependency_manager(nullptr), restart_scheduler(nullptr), learning_engine(nullptr), debug_helper(nullptr), interrupt_flag(false) {}
 
 QCDCL_solver::~QCDCL_solver() {}
 
@@ -22,14 +23,16 @@ void QCDCL_solver::addConstraint(vector<Literal>& literals, ConstraintType const
 }
 
 void QCDCL_solver::addDependency(Variable of, Variable on) {
-  dependency_manager->addDependency(of, on); 
-  solver_statistics.nr_dependencies++; // For now, we assume that dependencies do not get added twice.
+  if (variable_data_store->varType(of) != variable_data_store->varType(on)) {
+    dependency_manager->addDependency(of, on);
+  }
 }
 
 lbool QCDCL_solver::solve() {
   constraint_database->notifyStart();
   dependency_manager->notifyStart();
   decision_heuristic->notifyStart();
+  propagator->notifyStart();
   while (true) {
     if (interrupt_flag) {
       return l_Undef;
@@ -41,35 +44,37 @@ lbool QCDCL_solver::solve() {
       enqueue(l, CRef_Undef);
       solver_statistics.nr_decisions++;
     } else {
+      decision_heuristic->notifyConflict(constraint_type);
       uint32_t decision_level_backtrack_before;
       Literal unit_literal;
       vector<Literal> literal_vector; // Represents a learned constraint or a set of new dependencies to be learned.
       bool constraint_learned;
-      learning_engine->analyzeConflict(conflict_constraint_reference, constraint_type, literal_vector, decision_level_backtrack_before, unit_literal, constraint_learned);
+      vector<Literal> conflict_side_literals;
+      learning_engine->analyzeConflict(conflict_constraint_reference, constraint_type, literal_vector, decision_level_backtrack_before, unit_literal, constraint_learned, conflict_side_literals);
       if (constraint_learned) {
         if (literal_vector.empty()) {
           return lbool(constraint_type);
         } else {
           CRef learned_constraint_reference = constraint_database->addConstraint(literal_vector, constraint_type, true);
+          auto& learned_constraint = constraint_database->getConstraint(learned_constraint_reference, constraint_type);
+          decision_heuristic->notifyLearned(learned_constraint, constraint_type, conflict_side_literals);
           backtrackBefore(decision_level_backtrack_before);
+          assert(debug_helper->isUnit(learned_constraint, constraint_type));
           enqueue(unit_literal ^ constraint_type, learned_constraint_reference);
           propagator->addConstraint(learned_constraint_reference, constraint_type);
+          restart_scheduler->notifyLearned(learned_constraint);
           solver_statistics.learned_total[constraint_type]++;
         }
       } else {
         Variable unit_variable = var(unit_literal);
-        for (Literal literal: literal_vector) {
-          assert(unit_variable != var(literal));
-          dependency_manager->addDependency(unit_variable, var(literal));
-          solver_statistics.nr_dependencies++;
-        }
+        dependency_manager->learnDependencies(unit_variable, literal_vector);
         auto decision_level_backtrack_before = variable_data_store->varDecisionLevel(unit_variable);
         backtrackBefore(decision_level_backtrack_before);
         solver_statistics.backtracks_dep++;
       }
       constraint_database->notifyConflict(constraint_type);
-      bool do_restart = restart_scheduler->notifyConflict(constraint_type);
-      if (do_restart) {
+      restart_scheduler->notifyConflict(constraint_type);
+      if (restart_scheduler->restart()) {
         restart();
         constraint_database->notifyRestart();
       }
@@ -82,7 +87,7 @@ bool QCDCL_solver::enqueue(Literal l, CRef reason) {
   if (variable_data_store->isAssigned(v)) {
     return (variable_data_store->assignment(v) == sign(l));
   } else {
-    //BOOST_LOG_TRIVIAL(trace) << "Enqueue literal" << (reason == CRef_Undef ? "(decision)": "") << ": " << (sign(l) ? "" : "-") << var(l);
+    //LOG(trace) << "Enqueue literal" << (reason == CRef_Undef ? "(decision)": "") << ": " << (sign(l) ? "" : "-") << var(l) << std::endl;
     variable_data_store->appendToTrail(l, reason);
     propagator->notifyAssigned(l);
     decision_heuristic->notifyAssigned(l);
@@ -101,7 +106,7 @@ void QCDCL_solver::undoLast() {
 
 void QCDCL_solver::backtrackBefore(uint32_t target_decision_level) {
   solver_statistics.backtracks_total++;
-  BOOST_LOG_TRIVIAL(trace) << "Backtracking before decision level: " << target_decision_level;
+  LOG(trace) << "Backtracking before decision level: " << target_decision_level << std::endl;
   propagator->notifyBacktrack(target_decision_level);
   decision_heuristic->notifyBacktrack(target_decision_level); // Target decision level must be passed to the VMTF decision heuristic.
   while (!variable_data_store->trailIsEmpty() && variable_data_store->decisionLevel() >= target_decision_level) {

@@ -23,7 +23,7 @@ public:
   virtual void notifyAssigned(Literal l);
   virtual void notifyEligible(Variable v);
   virtual void notifyUnassigned(Literal l);
-  virtual void notifyLearned(Constraint& c);
+  virtual void notifyLearned(Constraint& c, ConstraintType constraint_type, vector<Literal>& conflict_side_literals);
   virtual void notifyBacktrack(uint32_t decision_level_before);
   virtual Literal getDecisionLiteral();
 
@@ -56,7 +56,6 @@ protected:
   uint32_t timestamp;
   vector<ListEntry> decision_list;
   priority_queue<Variable, vector<Variable>, CompareVariables> overflow_queue;
-  vector<lbool> saved_phase;
   uint32_t backtrack_decision_level_before;
 
   bool no_phase_saving;

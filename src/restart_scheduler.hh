@@ -9,7 +9,9 @@ class RestartScheduler {
 
 public:
   virtual ~RestartScheduler() {}
-  virtual bool notifyConflict(ConstraintType constraint_type) = 0;
+  virtual void notifyConflict(ConstraintType constraint_type) = 0;
+  virtual void notifyLearned(Constraint& c) = 0;
+  virtual bool restart() = 0;
 
 };
 

@@ -11,7 +11,6 @@
 using std::fill;
 using std::vector;
 using std::string;
-using std::sort;
 
 namespace Qute {
 
@@ -19,11 +18,13 @@ class StandardLearningEngine: public LearningEngine {
 
 public:
   StandardLearningEngine(QCDCL_solver& solver);
-  virtual void analyzeConflict(CRef conflict_constraint_reference, ConstraintType constraint_type, vector<Literal>& literal_vector,
-                               uint32_t& decision_level_backtrack_before, Literal& unit_literal, bool& constraint_learned);
+  virtual void analyzeConflict(CRef conflict_constraint_reference, ConstraintType constraint_type, 
+                               vector<Literal>& literal_vector, uint32_t& decision_level_backtrack_before, 
+                               Literal& unit_literal, bool& constraint_learned, vector<Literal>& conflict_side_literals);
   string reducedLast();
 
 protected:
+  vector<bool> constraintToCf(Constraint& constraint, ConstraintType constraint_type, Literal& rightmost_primary);
   bool cfToLiteralVector(vector<bool>& characteristic_function, vector<Literal>& literal_vector, Literal& rightmost_primary) const;
   vector<uint32_t> getPrimaryLiteralDecisionLevelCounts(Constraint& constraint, ConstraintType constraint_type);
   vector<uint32_t> getPrimaryLiteralDecisionLevelCounts(vector<bool>& characteristic_function, Literal& rightmost_primary, ConstraintType constraint_type);
@@ -35,7 +36,7 @@ protected:
   vector<Literal> cfToVector(vector<bool>& characteristic_function, Literal rightmost_primary);
 
   QCDCL_solver& solver;
-  vector<Literal> reduced_last;
+  vector<bool> reduced_last;
 };
 
 // Implementation of inline methods.
