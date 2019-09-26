@@ -18,8 +18,8 @@ else()
   set(CMAKE_BUILD_TYPE Release)
 endif ()
 
-include_directories("include")
-include_directories("docopt")
+include_directories("minisat")
+include_directories("docopt.cpp")
 
-add_subdirectory("docopt")
+add_subdirectory("docopt.cpp")
 add_subdirectory("src")

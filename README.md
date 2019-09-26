@@ -9,6 +9,8 @@ Use the following sequence of commands to clone the repository and build Qute:
 ```
 git clone https://github.com/perebor/qute.git
 cd qute
+git submodule init
+git submodule update
 mkdir build
 cd build
 cmake ..
