@@ -12,6 +12,7 @@
 #include "constraint_DB.hh"
 #include "decision_heuristic_VMTF_deplearn.hh"
 #include "decision_heuristic_VMTF_prefix.hh"
+#include "decision_heuristic_VMTF_order.hh"
 #include "decision_heuristic_VSIDS_deplearn.hh"
 #include "decision_heuristic_SGDB.hh"
 #include "dependency_manager_watched.hh"
@@ -53,7 +54,7 @@ General Options:
   --constraint-activity-inc <double>    constraint activity increment [default: 1]
   --constraint-activity-decay <double>  constraint activity decay [default: 0.999]
   --decision-heuristic arg              variable decision heuristic [default: VMTF]
-                                        (VSIDS | VMTF | SGDB)
+                                        (VSIDS | VMTF | VMTF_ORD | SGDB)
   --restarts arg                        restart strategy [default: inner-outer]
                                         (off | luby | inner-outer | EMA)
   --model-generation arg                model generation strategy for initial terms [default: depqbf]
@@ -124,7 +125,7 @@ int main(int argc, const char** argv)
   argument_constraints.push_back(make_unique<RegexArgumentConstraint>(non_neg_int, "--LBD-threshold", "unsigned int"));
   argument_constraints.push_back(make_unique<DoubleRangeConstraint>(0, 1, "--constraint-activity-decay"));
 
-  vector<string> decision_heuristics = {"VSIDS", "VMTF", "SGDB"};
+  vector<string> decision_heuristics = {"VSIDS", "VMTF", "VMTF_ORD", "SGDB"};
   argument_constraints.push_back(make_unique<ListConstraint>(decision_heuristics, "--decision-heuristic"));
   
   vector<string> restart_strategies = {"off", "luby", "inner-outer", "EMA"};
@@ -204,6 +205,8 @@ if (args["--dependency-learning"].asString() == "off") {
   decision_heuristic = make_unique<DecisionHeuristicVMTFprefix>(*solver, args["--no-phase-saving"].asBool());
 } else if (args["--decision-heuristic"].asString() == "VMTF") {
   decision_heuristic = make_unique<DecisionHeuristicVMTFdeplearn>(*solver, args["--no-phase-saving"].asBool());
+} else if (args["--decision-heuristic"].asString() == "VMTF_ORD") {
+  decision_heuristic = make_unique<DecisionHeuristicVMTForder>(*solver, args["--no-phase-saving"].asBool());
 } else if (args["--decision-heuristic"].asString() == "VSIDS") {
   bool tiebreak_scores;
   bool use_secondary_occurrences;
