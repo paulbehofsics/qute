@@ -72,6 +72,8 @@ bool DecisionHeuristic::phaseHeuristic(Variable v) {
 
 }*/
 
+void DecisionHeuristic::notifyRestart() {}
+
 void DecisionHeuristic::notifyConflict(ConstraintType constraint_type) {
   conflict_counter++;
   /* map<Variable,bool> assignment;

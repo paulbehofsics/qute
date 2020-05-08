@@ -77,6 +77,7 @@ lbool QCDCL_solver::solve() {
       if (restart_scheduler->restart()) {
         restart();
         constraint_database->notifyRestart();
+        decision_heuristic->notifyRestart();
       }
     }
   }

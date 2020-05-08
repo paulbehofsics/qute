@@ -36,6 +36,7 @@ public:
   virtual void notifyEligible(Variable v) = 0;
   virtual void notifyLearned(Constraint& c, ConstraintType constraint_type, vector<Literal>& conflict_side_literals) = 0;
   virtual void notifyBacktrack(uint32_t decision_level_before) = 0;
+  virtual void notifyRestart();
   virtual Literal getDecisionLiteral() = 0;
   virtual void notifyConflict(ConstraintType constraint_type);
 
