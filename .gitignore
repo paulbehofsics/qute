@@ -1,5 +1,7 @@
 qute
 build/
+debug/
+.vscode/
 CMakeFiles/
 CMakeCache.txt
 *.cmake
