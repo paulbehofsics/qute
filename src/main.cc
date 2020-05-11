@@ -86,6 +86,9 @@ SGDB Options:
   --learning-rate-minimum <double>      Minimum learning rate [default: 0.12]
   --lambda-factor <double>              Regularization parameter [default: 0.1]
 
+Split VMTF Options:
+  --mode-cycles <int>                   The number of restarts after which a mode switch happens [default: 1]
+
 Luby Restart Options:
   --luby-restart-multiplier <int>       Multiplier for restart intervals [default: 50]
 
@@ -168,6 +171,8 @@ int main(int argc, const char** argv)
 
   argument_constraints.push_back(make_unique<IfThenConstraint>("--dependency-learning", "off", "--decision-heuristic", "VMTF",
     "decision heuristic must be VMTF if dependency learning is deactivated"));
+    
+  argument_constraints.push_back(make_unique<RegexArgumentConstraint>(non_neg_int, "--mode-cycles", "unsigned int"));
 
   for (auto& constraint_ptr: argument_constraints) {
     if (!constraint_ptr->check(args)) {
@@ -209,7 +214,10 @@ if (args["--dependency-learning"].asString() == "off") {
 } else if (args["--decision-heuristic"].asString() == "VMTF_ORD") {
   decision_heuristic = make_unique<DecisionHeuristicVMTForder>(*solver, args["--no-phase-saving"].asBool());
 } else if (args["--decision-heuristic"].asString() == "SPLIT_VMTF") {
-  decision_heuristic = make_unique<DecisionHeuristicSplitVMTF>(*solver, args["--no-phase-saving"].asBool());
+  decision_heuristic = make_unique<DecisionHeuristicSplitVMTF>(
+    *solver, args["--no-phase-saving"].asBool(),
+    static_cast<uint32_t>(args["--mode-cycles"].asLong())
+  );
 } else if (args["--decision-heuristic"].asString() == "VSIDS") {
   bool tiebreak_scores;
   bool use_secondary_occurrences;

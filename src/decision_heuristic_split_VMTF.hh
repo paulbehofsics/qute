@@ -16,7 +16,7 @@ namespace Qute {
 class DecisionHeuristicSplitVMTF: public DecisionHeuristic {
 
 public:
-  DecisionHeuristicSplitVMTF(QCDCL_solver& solver, bool no_phase_saving);
+  DecisionHeuristicSplitVMTF(QCDCL_solver& solver, bool no_phase_saving, uint32_t mode_cycles);
 
   virtual void addVariable(bool auxiliary);
   virtual void notifyStart();
@@ -42,7 +42,6 @@ protected:
   bool isConstraintTypeOfMode(ConstraintType constraint_type);
 
   enum DecisionMode { ExistMode, UnivMode };
-  const uint32_t MAX_MODE_CYCLES = 1;
 
   struct ListEntry
   {
@@ -70,6 +69,7 @@ protected:
     DecisionModeData(): list_head(0), next_search(0), overflow_queue(CompareVariables(decision_list)) {}
   };
 
+  const uint32_t mode_cycles = 1;
   u_int32_t cycle_counter;
   DecisionMode current_mode;
   DecisionModeData* mode;
@@ -144,6 +144,8 @@ inline bool DecisionHeuristicSplitVMTF::isConstraintTypeOfMode(ConstraintType co
   } else if (current_mode == UnivMode) {
     return constraint_type == clauses;
   }
+  assert(false);
+  return false;
 }
 
 }

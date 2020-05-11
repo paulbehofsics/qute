@@ -2,8 +2,8 @@
 
 namespace Qute {
 
-DecisionHeuristicSplitVMTF::DecisionHeuristicSplitVMTF(QCDCL_solver& solver, bool no_phase_saving): 
-  DecisionHeuristic(solver), cycle_counter(0), current_mode(UnivMode), mode(&univ_mode),
+DecisionHeuristicSplitVMTF::DecisionHeuristicSplitVMTF(QCDCL_solver& solver, bool no_phase_saving, uint32_t mode_cycles): 
+  DecisionHeuristic(solver), mode_cycles(mode_cycles), cycle_counter(0), current_mode(UnivMode), mode(&univ_mode),
   exist_mode(), univ_mode(), timestamp(0), no_phase_saving(no_phase_saving) {}
 
 void DecisionHeuristicSplitVMTF::addVariable(bool auxiliary) {
@@ -47,7 +47,7 @@ void DecisionHeuristicSplitVMTF::notifyBacktrack(uint32_t decision_level_before)
 
 void DecisionHeuristicSplitVMTF::notifyRestart() {
   cycle_counter++;
-  if (cycle_counter >= MAX_MODE_CYCLES) {
+  if (cycle_counter >= mode_cycles) {
     toggleMode();
     cycle_counter = 0;
   }
