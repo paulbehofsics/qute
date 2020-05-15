@@ -88,6 +88,7 @@ SGDB Options:
 
 Split VMTF Options:
   --mode-cycles <int>                   The number of restarts after which a mode switch happens [default: 1]
+  --always-move                         Force the heuristic to move variables for every learnt constraint
 
 Luby Restart Options:
   --luby-restart-multiplier <int>       Multiplier for restart intervals [default: 50]
@@ -215,8 +216,8 @@ if (args["--dependency-learning"].asString() == "off") {
   decision_heuristic = make_unique<DecisionHeuristicVMTForder>(*solver, args["--no-phase-saving"].asBool());
 } else if (args["--decision-heuristic"].asString() == "SPLIT_VMTF") {
   decision_heuristic = make_unique<DecisionHeuristicSplitVMTF>(
-    *solver, args["--no-phase-saving"].asBool(),
-    static_cast<uint32_t>(args["--mode-cycles"].asLong())
+    *solver, args["--no-phase-saving"].asBool(), static_cast<uint32_t>(args["--mode-cycles"].asLong()),
+    args["--always-move"].asBool()
   );
 } else if (args["--decision-heuristic"].asString() == "VSIDS") {
   bool tiebreak_scores;

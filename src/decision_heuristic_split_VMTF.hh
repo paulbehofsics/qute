@@ -16,7 +16,7 @@ namespace Qute {
 class DecisionHeuristicSplitVMTF: public DecisionHeuristic {
 
 public:
-  DecisionHeuristicSplitVMTF(QCDCL_solver& solver, bool no_phase_saving, uint32_t mode_cycles);
+  DecisionHeuristicSplitVMTF(QCDCL_solver& solver, bool no_phase_saving, uint32_t mode_cycles, bool always_move);
 
   virtual void addVariable(bool auxiliary);
   virtual void notifyStart();
@@ -32,7 +32,7 @@ protected:
   struct DecisionModeData;
 
   void resetTimestamps();
-  void moveToFront(Variable variable);
+  void moveToFront(Variable variable, DecisionModeData& mode);
   void clearOverflowQueue();
   uint32_t maxTimestampEligible();
   bool checkOrder();
@@ -40,6 +40,7 @@ protected:
   void addVariable(bool auxiliary, DecisionModeData& mode);
   void notifyStart(DecisionModeData& mode);
   bool isConstraintTypeOfMode(ConstraintType constraint_type);
+  void moveVariables(Constraint& c, DecisionModeData& mode);
 
   enum DecisionMode { ExistMode, UnivMode };
 
@@ -69,9 +70,10 @@ protected:
     DecisionModeData(): list_head(0), next_search(0), overflow_queue(CompareVariables(decision_list)) {}
   };
 
-  const uint32_t mode_cycles = 1;
+  const uint32_t mode_cycles;
+  const bool always_move;
   u_int32_t cycle_counter;
-  DecisionMode current_mode;
+  DecisionMode mode_type;
   DecisionModeData* mode;
   DecisionModeData exist_mode;
   DecisionModeData univ_mode;
@@ -139,9 +141,9 @@ inline uint32_t DecisionHeuristicSplitVMTF::maxTimestampEligible() {
 }
 
 inline bool DecisionHeuristicSplitVMTF::isConstraintTypeOfMode(ConstraintType constraint_type) {
-  if (current_mode == ExistMode) {
+  if (mode_type == ExistMode) {
     return constraint_type == terms;
-  } else if (current_mode == UnivMode) {
+  } else if (mode_type == UnivMode) {
     return constraint_type == clauses;
   }
   assert(false);

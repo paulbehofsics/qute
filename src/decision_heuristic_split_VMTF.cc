@@ -2,9 +2,11 @@
 
 namespace Qute {
 
-DecisionHeuristicSplitVMTF::DecisionHeuristicSplitVMTF(QCDCL_solver& solver, bool no_phase_saving, uint32_t mode_cycles): 
-  DecisionHeuristic(solver), mode_cycles(mode_cycles), cycle_counter(0), current_mode(UnivMode), mode(&univ_mode),
-  exist_mode(), univ_mode(), timestamp(0), no_phase_saving(no_phase_saving) {}
+DecisionHeuristicSplitVMTF::DecisionHeuristicSplitVMTF(QCDCL_solver& solver, bool no_phase_saving,
+    uint32_t mode_cycles, bool always_move): 
+  DecisionHeuristic(solver), mode_cycles(mode_cycles), cycle_counter(0), always_move(always_move),
+  mode_type(UnivMode), mode(&univ_mode), exist_mode(), univ_mode(),
+  timestamp(0), no_phase_saving(no_phase_saving) {}
 
 void DecisionHeuristicSplitVMTF::addVariable(bool auxiliary) {
   saved_phase.push_back(l_Undef);
@@ -30,13 +32,15 @@ void DecisionHeuristicSplitVMTF::notifyUnassigned(Literal l) {
 
 void DecisionHeuristicSplitVMTF::notifyLearned(Constraint& c, ConstraintType constraint_type, vector<Literal>& conflict_side_literals) {
   // Bump every assigned variable in the learned constraint, if the constraint fits the current mode.
-  if (isConstraintTypeOfMode(constraint_type)) {
-    for (Literal l: c) {
-      Variable v = var(l);
-      if (solver.variable_data_store->isAssigned(v)) {
-        moveToFront(v);
-      }
+  if (always_move) {
+    if (constraint_type == terms) {
+      moveVariables(c, exist_mode);
+    } else if (constraint_type == clauses) {
+      moveVariables(c, univ_mode);
     }
+  }
+  else if (isConstraintTypeOfMode(constraint_type)) {
+    moveVariables(c, *mode);
   }
 }
 
@@ -91,8 +95,17 @@ void DecisionHeuristicSplitVMTF::resetTimestamps() {
   } while (list_ptr != mode->list_head);
 }
 
-void DecisionHeuristicSplitVMTF::moveToFront(Variable variable) {
-  Variable current_head = mode->list_head;
+void DecisionHeuristicSplitVMTF::moveVariables(Constraint& c, DecisionModeData& mode) {
+  for (Literal l: c) {
+      Variable v = var(l);
+      if (solver.variable_data_store->isAssigned(v)) {
+        moveToFront(v, mode);
+      }
+    }
+}
+
+void DecisionHeuristicSplitVMTF::moveToFront(Variable variable, DecisionModeData& mode) {
+  Variable current_head = mode.list_head;
 
   /* If the variable is already at the head of the list or an auxiliary variable,
      don't do anything. */
@@ -104,21 +117,21 @@ void DecisionHeuristicSplitVMTF::moveToFront(Variable variable) {
   if (timestamp == ((uint32_t)-1)) {
     resetTimestamps();
   }
-  mode->decision_list[variable - 1].timestamp = ++timestamp;
+  mode.decision_list[variable - 1].timestamp = ++timestamp;
 
   /* Detach variable from list */
-  Variable current_prev = mode->decision_list[variable - 1].prev;
-  Variable current_next = mode->decision_list[variable - 1].next;
-  mode->decision_list[current_prev - 1].next = current_next;
-  mode->decision_list[current_next - 1].prev = current_prev;
+  Variable current_prev = mode.decision_list[variable - 1].prev;
+  Variable current_next = mode.decision_list[variable - 1].next;
+  mode.decision_list[current_prev - 1].next = current_next;
+  mode.decision_list[current_next - 1].prev = current_prev;
 
   /* Insert variable as list head */
-  Variable current_head_prev = mode->decision_list[current_head - 1].prev;
-  mode->decision_list[current_head - 1].prev = variable;
-  mode->decision_list[variable - 1].next = current_head;
-  mode->decision_list[variable - 1].prev = current_head_prev;
-  mode->decision_list[current_head_prev - 1].next = variable;
-  mode->list_head = variable;
+  Variable current_head_prev = mode.decision_list[current_head - 1].prev;
+  mode.decision_list[current_head - 1].prev = variable;
+  mode.decision_list[variable - 1].next = current_head;
+  mode.decision_list[variable - 1].prev = current_head_prev;
+  mode.decision_list[current_head_prev - 1].next = variable;
+  mode.list_head = variable;
   assert(checkOrder());
 }
 
@@ -133,11 +146,11 @@ bool DecisionHeuristicSplitVMTF::checkOrder() {
 }
 
 void DecisionHeuristicSplitVMTF::toggleMode() {
-  if (current_mode == ExistMode) {
-    current_mode = UnivMode;
+  if (mode_type == ExistMode) {
+    mode_type = UnivMode;
     mode = &univ_mode;
-  } else if (current_mode == UnivMode) {
-    current_mode = ExistMode;
+  } else if (mode_type == UnivMode) {
+    mode_type = ExistMode;
     mode = &exist_mode;
   }
   resetTimestamps();
