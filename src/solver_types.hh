@@ -90,6 +90,9 @@ inline bool disablingPolarity(ConstraintType constraint_type) {
   return !constraint_type;
 }
 
+// Decision mode of split decision heuristics
+enum DecisionMode { ExistMode, UnivMode };
+
 }
 
 namespace std {

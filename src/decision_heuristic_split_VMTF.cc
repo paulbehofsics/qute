@@ -3,14 +3,27 @@
 namespace Qute {
 
 DecisionHeuristicSplitVMTF::DecisionHeuristicSplitVMTF(QCDCL_solver& solver, bool no_phase_saving,
-    uint32_t mode_cycles, bool always_move): 
-  DecisionHeuristic(solver), mode_cycles(mode_cycles), cycle_counter(0), always_move(always_move),
-  mode_type(UnivMode), mode(&univ_mode), exist_mode(), univ_mode(),
-  timestamp(0), no_phase_saving(no_phase_saving) {}
+    uint32_t mode_cycles, bool always_move, bool split_phase_saving, bool start_univ_mode):
+      DecisionHeuristic(solver), always_move(always_move), mode_cycles(mode_cycles),
+      cycle_counter(0), exist_mode(), univ_mode(), timestamp(0), no_phase_saving(no_phase_saving) {
+  if (start_univ_mode) {
+    mode_type = UnivMode;
+    mode = &univ_mode;
+  } else {
+    mode_type = ExistMode;
+    mode = &exist_mode;
+  }
+
+  if (split_phase_saving) {
+    phase_saving = SplitPhaseSaving(mode_type);
+  } else {
+    phase_saving = PhaseSaving();
+  }
+}
 
 void DecisionHeuristicSplitVMTF::addVariable(bool auxiliary) {
-  saved_phase.push_back(l_Undef);
   is_auxiliary.push_back(auxiliary);
+  phase_saving.addVariable();
   addVariable(auxiliary, exist_mode);
   addVariable(auxiliary, univ_mode);
 }
@@ -78,10 +91,10 @@ Literal DecisionHeuristicSplitVMTF::getDecisionLiteral() {
   assert(!is_auxiliary[candidate - 1]);
   assert(solver.dependency_manager->isDecisionCandidate(candidate));
   assert(mode->decision_list[candidate - 1].timestamp == maxTimestampEligible());
-  if (no_phase_saving || saved_phase[candidate - 1] == l_Undef) {
-    saved_phase[candidate - 1] = phaseHeuristic(candidate);
+  if (no_phase_saving || !phase_saving.hasPhase(candidate)) {
+    phase_saving.savePhase(candidate, phaseHeuristic(candidate));
   }
-  return mkLiteral(candidate, saved_phase[candidate - 1]);
+  return mkLiteral(candidate, phase_saving.getPhase(candidate));
 }
 
 void DecisionHeuristicSplitVMTF::resetTimestamps() {
@@ -155,6 +168,7 @@ void DecisionHeuristicSplitVMTF::toggleMode() {
   }
   resetTimestamps();
   mode->next_search = mode->list_head;
+  phase_saving.notifyToggleDecisionMode();
 }
 
 void DecisionHeuristicSplitVMTF::addVariable(bool auxiliary, DecisionModeData& mode) {

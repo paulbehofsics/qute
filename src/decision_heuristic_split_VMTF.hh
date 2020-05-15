@@ -5,6 +5,8 @@
 #include <queue>
 #include <random>
 #include "decision_heuristic.hh"
+#include "phase_saving.hh"
+#include "split_phase_saving.hh"
 
 using std::vector;
 using std::priority_queue;
@@ -16,14 +18,17 @@ namespace Qute {
 class DecisionHeuristicSplitVMTF: public DecisionHeuristic {
 
 public:
-  DecisionHeuristicSplitVMTF(QCDCL_solver& solver, bool no_phase_saving, uint32_t mode_cycles, bool always_move);
+  DecisionHeuristicSplitVMTF(QCDCL_solver& solver, bool no_phase_saving,
+    uint32_t mode_cycles, bool always_move, bool split_phase_saving,
+    bool start_univ_mode);
 
   virtual void addVariable(bool auxiliary);
   virtual void notifyStart();
   virtual void notifyAssigned(Literal l);
   virtual void notifyEligible(Variable v);
   virtual void notifyUnassigned(Literal l);
-  virtual void notifyLearned(Constraint& c, ConstraintType constraint_type, vector<Literal>& conflict_side_literals);
+  virtual void notifyLearned(Constraint& c, ConstraintType constraint_type,
+    vector<Literal>& conflict_side_literals);
   virtual void notifyBacktrack(uint32_t decision_level_before);
   virtual void notifyRestart();
   virtual Literal getDecisionLiteral();
@@ -41,8 +46,6 @@ protected:
   void notifyStart(DecisionModeData& mode);
   bool isConstraintTypeOfMode(ConstraintType constraint_type);
   void moveVariables(Constraint& c, DecisionModeData& mode);
-
-  enum DecisionMode { ExistMode, UnivMode };
 
   struct ListEntry
   {
@@ -70,13 +73,14 @@ protected:
     DecisionModeData(): list_head(0), next_search(0), overflow_queue(CompareVariables(decision_list)) {}
   };
 
-  const uint32_t mode_cycles;
   const bool always_move;
+  const uint32_t mode_cycles;
   u_int32_t cycle_counter;
   DecisionMode mode_type;
   DecisionModeData* mode;
   DecisionModeData exist_mode;
   DecisionModeData univ_mode;
+  PhaseSaving phase_saving;
 
   uint32_t timestamp;
   uint32_t backtrack_decision_level_before;
@@ -104,7 +108,7 @@ inline void DecisionHeuristicSplitVMTF::notifyStart(DecisionModeData& mode) {
 }
 
 inline void DecisionHeuristicSplitVMTF::notifyAssigned(Literal l) {
-  saved_phase[var(l) - 1] = sign(l);
+  phase_saving.savePhase(var(l), sign(l));
 }
 
 inline void DecisionHeuristicSplitVMTF::notifyEligible(Variable v) {
