@@ -19,8 +19,8 @@ class DecisionHeuristicSplitVMTF: public DecisionHeuristic {
 
 public:
   DecisionHeuristicSplitVMTF(QCDCL_solver& solver, bool no_phase_saving,
-    uint32_t mode_cycles, bool always_move, bool split_phase_saving,
-    bool start_univ_mode);
+    uint32_t mode_cycles, bool always_move, bool move_by_prefix,
+    bool split_phase_saving, bool start_univ_mode);
 
   virtual void addVariable(bool auxiliary);
   virtual void notifyStart();
@@ -46,6 +46,8 @@ protected:
   void notifyStart(DecisionModeData& mode);
   bool isConstraintTypeOfMode(ConstraintType constraint_type);
   void moveVariables(Constraint& c, DecisionModeData& mode);
+  void moveVariablesByPrefix(Constraint& c, DecisionModeData& mode);
+  void moveVariablesArbitrary(Constraint& c, DecisionModeData& mode);
 
   struct ListEntry
   {
@@ -74,6 +76,7 @@ protected:
   };
 
   const bool always_move;
+  const bool move_by_prefix;
   const uint32_t mode_cycles;
   u_int32_t cycle_counter;
   DecisionMode mode_type;

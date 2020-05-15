@@ -3,9 +3,11 @@
 namespace Qute {
 
 DecisionHeuristicSplitVMTF::DecisionHeuristicSplitVMTF(QCDCL_solver& solver, bool no_phase_saving,
-    uint32_t mode_cycles, bool always_move, bool split_phase_saving, bool start_univ_mode):
-      DecisionHeuristic(solver), always_move(always_move), mode_cycles(mode_cycles),
-      cycle_counter(0), exist_mode(), univ_mode(), timestamp(0), no_phase_saving(no_phase_saving) {
+    uint32_t mode_cycles, bool always_move, bool move_by_prefix, bool split_phase_saving, bool start_univ_mode):
+      DecisionHeuristic(solver), always_move(always_move), move_by_prefix(move_by_prefix),
+      mode_cycles(mode_cycles), cycle_counter(0), exist_mode(), univ_mode(), timestamp(0),
+      no_phase_saving(no_phase_saving) {
+
   if (start_univ_mode) {
     mode_type = UnivMode;
     mode = &univ_mode;
@@ -109,12 +111,38 @@ void DecisionHeuristicSplitVMTF::resetTimestamps() {
 }
 
 void DecisionHeuristicSplitVMTF::moveVariables(Constraint& c, DecisionModeData& mode) {
+  if (move_by_prefix) {
+    moveVariablesByPrefix(c, mode);
+  } else {
+    moveVariablesArbitrary(c, mode);
+  }
+}
+
+void DecisionHeuristicSplitVMTF::moveVariablesByPrefix(Constraint& c, DecisionModeData& mode) {
+  // Move to front all assigned variables in the learned constraint sorted by their id (position in the prefix).
+  // The variable with the lowest id (lowest quantifier depth) will end up on the first position of the list.
+  priority_queue<Variable> vars_to_move;
   for (Literal l: c) {
-      Variable v = var(l);
-      if (solver.variable_data_store->isAssigned(v)) {
-        moveToFront(v, mode);
-      }
+    Variable v = var(l);
+    if (solver.variable_data_store->isAssigned(v)) {
+      vars_to_move.push(v);
     }
+  }
+  while (!vars_to_move.empty()) {
+    Variable v = vars_to_move.top();
+    vars_to_move.pop();
+    moveToFront(v, mode);
+  }
+}
+
+void DecisionHeuristicSplitVMTF::moveVariablesArbitrary(Constraint& c, DecisionModeData& mode) {
+  // Move to front all assigned variables in the learned constraint in arbitrary order
+  for (Literal l: c) {
+    Variable v = var(l);
+    if (solver.variable_data_store->isAssigned(v)) {
+      moveToFront(v, mode);
+    }
+  }
 }
 
 void DecisionHeuristicSplitVMTF::moveToFront(Variable variable, DecisionModeData& mode) {
