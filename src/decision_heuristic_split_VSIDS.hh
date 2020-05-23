@@ -38,7 +38,7 @@ protected:
   void precomputeVariableOccurrences(bool use_secondary_occurrences_for_tiebreaking);
   void bumpVariableScore(Variable v, DecisionModeData& mode);
   void bumpVariableScores(Constraint& c, DecisionModeData& mode);
-  void rescaleVariableScores();
+  void rescaleVariableScores(DecisionModeData& mode);
   void decayVariableScores();
   Variable popFromVariableQueue();
   double getBestDecisionVariableScore();
@@ -80,11 +80,12 @@ protected:
 
   struct DecisionModeData
   {
+    double score_increment;
     IntMap<Variable, double> variable_activity;
     Heap<Variable,CompareVariables> variable_queue;
-    DecisionModeData(const IntMap<Variable, int>& nr_literal_occurrences, bool tiebreak_scores,
-      bool prefer_fewer_occurrences):
-        variable_activity(),
+    DecisionModeData(const IntMap<Variable, int>& nr_literal_occurrences, double score_increment,
+      bool tiebreak_scores, bool prefer_fewer_occurrences):
+        score_increment(score_increment), variable_activity(),
         variable_queue(CompareVariables(variable_activity, nr_literal_occurrences,
           tiebreak_scores, prefer_fewer_occurrences)) {}
   };
@@ -94,7 +95,6 @@ protected:
   const bool tiebreak_scores;
   const bool use_secondary_occurrences_for_tiebreaking;
   const double score_decay_factor;
-  double score_increment;
   const uint32_t mode_cycles;
   u_int32_t cycle_counter;
 
@@ -127,7 +127,7 @@ inline void DecisionHeuristicSplitVSIDS::notifyBacktrack(uint32_t decision_level
 }
 
 inline void DecisionHeuristicSplitVSIDS::decayVariableScores() {
-  score_increment *= (1 / score_decay_factor);
+  mode->score_increment *= (1 / score_decay_factor);
 }
 
 inline Variable DecisionHeuristicSplitVSIDS::popFromVariableQueue() {

@@ -9,10 +9,9 @@ DecisionHeuristicSplitVSIDS::DecisionHeuristicSplitVSIDS(QCDCL_solver& solver,
       DecisionHeuristic(solver), no_phase_saving(no_phase_saving), always_bump(always_bump),
       tiebreak_scores(tiebreak_scores),
       use_secondary_occurrences_for_tiebreaking(use_secondary_occurrences_for_tiebreaking),
-      score_decay_factor(score_decay_factor), score_increment(score_increment),
-      mode_cycles(mode_cycles), cycle_counter(0),
-      exist_mode(nr_literal_occurrences, tiebreak_scores, prefer_fewer_occurrences),
-      univ_mode(nr_literal_occurrences, tiebreak_scores, prefer_fewer_occurrences) {
+      score_decay_factor(score_decay_factor), mode_cycles(mode_cycles), cycle_counter(0),
+      exist_mode(nr_literal_occurrences, score_increment, tiebreak_scores, prefer_fewer_occurrences),
+      univ_mode(nr_literal_occurrences, score_increment, tiebreak_scores, prefer_fewer_occurrences) {
 
   if (start_univ_mode) {
     mode_type = UnivMode;
@@ -130,19 +129,19 @@ void DecisionHeuristicSplitVSIDS::bumpVariableScores(Constraint& c, DecisionMode
 }
 
 void DecisionHeuristicSplitVSIDS::bumpVariableScore(Variable v, DecisionModeData& mode) {
-  mode.variable_activity[v] += score_increment;
+  mode.variable_activity[v] += mode.score_increment;
   mode.variable_queue.update(v);
   if (mode.variable_activity[v] > 1e60) {
-    rescaleVariableScores();
+    rescaleVariableScores(mode);
   }
 }
 
-void DecisionHeuristicSplitVSIDS::rescaleVariableScores() {
+void DecisionHeuristicSplitVSIDS::rescaleVariableScores(DecisionModeData& mode) {
   for (Variable v = 1; v <= solver.variable_data_store->lastVariable(); v++) {
-    mode->variable_activity[v] *= 1e-60;
-    mode->variable_queue.update(v);
+    mode.variable_activity[v] *= 1e-60;
+    mode.variable_queue.update(v);
   }
-  score_increment *= 1e-60;
+  mode.score_increment *= 1e-60;
 }
 
 void DecisionHeuristicSplitVSIDS::addVariable(bool auxiliary) {
