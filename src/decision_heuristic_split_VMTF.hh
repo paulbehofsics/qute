@@ -79,6 +79,7 @@ protected:
   const bool move_by_prefix;
   const uint32_t mode_cycles;
   u_int32_t cycle_counter;
+  
   DecisionMode mode_type;
   DecisionModeData* mode;
   DecisionModeData exist_mode;
@@ -100,16 +101,6 @@ inline void DecisionHeuristicSplitVMTF::notifyStart() {
   notifyStart(univ_mode);
 }
 
-inline void DecisionHeuristicSplitVMTF::notifyStart(DecisionModeData& mode) {
-  Variable list_ptr = mode.list_head;
-  if (mode.list_head) {
-    do {
-      list_ptr = mode.decision_list[list_ptr - 1].prev;
-      mode.decision_list[list_ptr - 1].timestamp = timestamp++;
-    } while (list_ptr != mode.list_head);
-  }
-}
-
 inline void DecisionHeuristicSplitVMTF::notifyAssigned(Literal l) {
   phase_saving.savePhase(var(l), sign(l));
 }
@@ -119,42 +110,6 @@ inline void DecisionHeuristicSplitVMTF::notifyEligible(Variable v) {
       !is_auxiliary[v - 1]) {
     mode->overflow_queue.push(v);
   }
-}
-
-inline void DecisionHeuristicSplitVMTF::clearOverflowQueue() {
-  while (!mode->overflow_queue.empty()) {
-    auto variable = mode->overflow_queue.top();
-    auto watcher = solver.dependency_manager->watcher(variable);
-    if ((watcher == 0 || (solver.variable_data_store->isAssigned(watcher) &&
-        (solver.variable_data_store->varDecisionLevel(watcher) < backtrack_decision_level_before))) &&
-        (mode->decision_list[variable - 1].timestamp > mode->decision_list[mode->next_search - 1].timestamp)) {
-      mode->next_search = variable;
-    }
-    mode->overflow_queue.pop();
-  }
-}
-
-inline uint32_t DecisionHeuristicSplitVMTF::maxTimestampEligible() {
-  Variable v = mode->list_head;
-  uint32_t max_timestamp = 0;
-  do {
-    if (solver.dependency_manager->isDecisionCandidate(v) && mode->decision_list[v - 1].timestamp > max_timestamp) {
-      assert(!is_auxiliary[v - 1]);
-      max_timestamp = mode->decision_list[v - 1].timestamp;
-    }
-    v = mode->decision_list[v - 1].next;
-  } while (v != mode->list_head);
-  return max_timestamp;
-}
-
-inline bool DecisionHeuristicSplitVMTF::isConstraintTypeOfMode(ConstraintType constraint_type) {
-  if (mode_type == ExistMode) {
-    return constraint_type == terms;
-  } else if (mode_type == UnivMode) {
-    return constraint_type == clauses;
-  }
-  assert(false);
-  return false;
 }
 
 }

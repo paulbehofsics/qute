@@ -90,9 +90,9 @@ SGDB Options:
 Split VMTF Options:
   --mode-cycles <int>                   The number of restarts after which a mode switch happens [default: 1]
   --always-move                         Force the heuristic to move variables for every learnt constraint
-  --move_by_prefix                      Move variables sorted by their quantifier depth when learning constraints
-  --split_phase_saving                  Force the heuristic to keep track of saved phases for the decision modes separately
-  --start_univ_mode                     Start the heuristic in universal mode instead of existential mode
+  --move-by-prefix                      Move variables sorted by their quantifier depth when learning constraints
+  --split-phase-saving                  Force the heuristic to keep track of saved phases for the decision modes separately
+  --start-univ-mode                     Start the heuristic in universal mode instead of existential mode
 
 Split VSIDS Options:
   --tiebreak arg                        tiebreaking strategy for equally active variables [default: arbitrary]
@@ -233,9 +233,9 @@ int main(int argc, const char** argv)
       *solver, args["--no-phase-saving"].asBool(),
       static_cast<uint32_t>(args["--mode-cycles"].asLong()),
       args["--always-move"].asBool(),
-      args["--move_by_prefix"].asBool(),
-      args["--split_phase_saving"].asBool(),
-      args["--start_univ_mode"].asBool()
+      args["--move-by-prefix"].asBool(),
+      args["--split-phase-saving"].asBool(),
+      args["--start-univ-mode"].asBool()
     );
   } else if (args["--decision-heuristic"].asString() == "VSIDS" ||
       args["--decision-heuristic"].asString() == "SPLIT_VSIDS") {

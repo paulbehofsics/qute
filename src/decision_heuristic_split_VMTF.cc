@@ -23,11 +23,14 @@ DecisionHeuristicSplitVMTF::DecisionHeuristicSplitVMTF(QCDCL_solver& solver, boo
   }
 }
 
-void DecisionHeuristicSplitVMTF::addVariable(bool auxiliary) {
-  is_auxiliary.push_back(auxiliary);
-  phase_saving.addVariable();
-  addVariable(auxiliary, exist_mode);
-  addVariable(auxiliary, univ_mode);
+void DecisionHeuristicSplitVMTF::notifyStart(DecisionModeData& mode) {
+  Variable list_ptr = mode.list_head;
+  if (mode.list_head) {
+    do {
+      list_ptr = mode.decision_list[list_ptr - 1].prev;
+      mode.decision_list[list_ptr - 1].timestamp = timestamp++;
+    } while (list_ptr != mode.list_head);
+  }
 }
 
 void DecisionHeuristicSplitVMTF::notifyUnassigned(Literal l) {
@@ -199,6 +202,13 @@ void DecisionHeuristicSplitVMTF::toggleMode() {
   phase_saving.notifyToggleDecisionMode();
 }
 
+void DecisionHeuristicSplitVMTF::addVariable(bool auxiliary) {
+  is_auxiliary.push_back(auxiliary);
+  phase_saving.addVariable();
+  addVariable(auxiliary, exist_mode);
+  addVariable(auxiliary, univ_mode);
+}
+
 void DecisionHeuristicSplitVMTF::addVariable(bool auxiliary, DecisionModeData& mode) {
   if (mode.decision_list.empty()) {
     mode.decision_list.emplace_back();
@@ -221,6 +231,42 @@ void DecisionHeuristicSplitVMTF::addVariable(bool auxiliary, DecisionModeData& m
     }
     mode.decision_list.push_back(new_entry);
   }
+}
+
+void DecisionHeuristicSplitVMTF::clearOverflowQueue() {
+  while (!mode->overflow_queue.empty()) {
+    auto variable = mode->overflow_queue.top();
+    auto watcher = solver.dependency_manager->watcher(variable);
+    if ((watcher == 0 || (solver.variable_data_store->isAssigned(watcher) &&
+        (solver.variable_data_store->varDecisionLevel(watcher) < backtrack_decision_level_before))) &&
+        (mode->decision_list[variable - 1].timestamp > mode->decision_list[mode->next_search - 1].timestamp)) {
+      mode->next_search = variable;
+    }
+    mode->overflow_queue.pop();
+  }
+}
+
+uint32_t DecisionHeuristicSplitVMTF::maxTimestampEligible() {
+  Variable v = mode->list_head;
+  uint32_t max_timestamp = 0;
+  do {
+    if (solver.dependency_manager->isDecisionCandidate(v) && mode->decision_list[v - 1].timestamp > max_timestamp) {
+      assert(!is_auxiliary[v - 1]);
+      max_timestamp = mode->decision_list[v - 1].timestamp;
+    }
+    v = mode->decision_list[v - 1].next;
+  } while (v != mode->list_head);
+  return max_timestamp;
+}
+
+bool DecisionHeuristicSplitVMTF::isConstraintTypeOfMode(ConstraintType constraint_type) {
+  if (mode_type == ExistMode) {
+    return constraint_type == terms;
+  } else if (mode_type == UnivMode) {
+    return constraint_type == clauses;
+  }
+  assert(false);
+  return false;
 }
 
 }
