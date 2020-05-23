@@ -16,6 +16,7 @@
 #include "decision_heuristic_VSIDS_deplearn.hh"
 #include "decision_heuristic_SGDB.hh"
 #include "decision_heuristic_split_VMTF.hh"
+#include "decision_heuristic_split_VSIDS.hh"
 #include "dependency_manager_watched.hh"
 #include "restart_scheduler_none.hh"
 #include "restart_scheduler_inner_outer.hh"
@@ -55,7 +56,7 @@ General Options:
   --constraint-activity-inc <double>    constraint activity increment [default: 1]
   --constraint-activity-decay <double>  constraint activity decay [default: 0.999]
   --decision-heuristic arg              variable decision heuristic [default: VMTF]
-                                        (VSIDS | VMTF | VMTF_ORD | SGDB | SPLIT_VMTF)
+                                        (VSIDS | VMTF | VMTF_ORD | SGDB | SPLIT_VMTF | SPLIT_VSIDS)
   --restarts arg                        restart strategy [default: inner-outer]
                                         (off | luby | inner-outer | EMA)
   --model-generation arg                model generation strategy for initial terms [default: depqbf]
@@ -92,6 +93,16 @@ Split VMTF Options:
   --move_by_prefix                      Move variables sorted by their quantifier depth when learning constraints
   --split_phase_saving                  Force the heuristic to keep track of saved phases for the decision modes separately
   --start_univ_mode                     Start the heuristic in universal mode instead of existential mode
+
+Split VSIDS Options:
+  --tiebreak arg                        tiebreaking strategy for equally active variables [default: arbitrary]
+                                        (arbitrary, more-primary, fewer-primary, more-secondary, fewer-secondary)
+  --var-activity-inc <double>           variable activity increment [default: 1]
+  --var-activity-decay <double>         variable activity decay [default: 0.95]
+  --mode-cycles <int>                   The number of restarts after which a mode switch happens [default: 1]
+  --always-bump                         Force the heuristic to bump variable scores for every learnt constraint
+  --split-phase-saving                  Force the heuristic to keep track of saved phases for the decision modes separately
+  --start-univ-mode                     Start the heuristic in universal mode instead of existential mode
 
 Luby Restart Options:
   --luby-restart-multiplier <int>       Multiplier for restart intervals [default: 50]
@@ -133,7 +144,7 @@ int main(int argc, const char** argv)
   argument_constraints.push_back(make_unique<RegexArgumentConstraint>(non_neg_int, "--LBD-threshold", "unsigned int"));
   argument_constraints.push_back(make_unique<DoubleRangeConstraint>(0, 1, "--constraint-activity-decay"));
 
-  vector<string> decision_heuristics = {"VSIDS", "VMTF", "VMTF_ORD", "SGDB", "SPLIT_VMTF"};
+  vector<string> decision_heuristics = {"VSIDS", "VMTF", "VMTF_ORD", "SGDB", "SPLIT_VMTF", "SPLIT_VSIDS"};
   argument_constraints.push_back(make_unique<ListConstraint>(decision_heuristics, "--decision-heuristic"));
   
   vector<string> restart_strategies = {"off", "luby", "inner-outer", "EMA"};
@@ -211,50 +222,66 @@ int main(int argc, const char** argv)
   solver->dependency_manager = &dependency_manager;
   unique_ptr<DecisionHeuristic> decision_heuristic;
 
-if (args["--dependency-learning"].asString() == "off") {
-  decision_heuristic = make_unique<DecisionHeuristicVMTFprefix>(*solver, args["--no-phase-saving"].asBool());
-} else if (args["--decision-heuristic"].asString() == "VMTF") {
-  decision_heuristic = make_unique<DecisionHeuristicVMTFdeplearn>(*solver, args["--no-phase-saving"].asBool());
-} else if (args["--decision-heuristic"].asString() == "VMTF_ORD") {
-  decision_heuristic = make_unique<DecisionHeuristicVMTForder>(*solver, args["--no-phase-saving"].asBool());
-} else if (args["--decision-heuristic"].asString() == "SPLIT_VMTF") {
-  decision_heuristic = make_unique<DecisionHeuristicSplitVMTF>(
-    *solver, args["--no-phase-saving"].asBool(), static_cast<uint32_t>(args["--mode-cycles"].asLong()),
-    args["--always-move"].asBool(), args["--move_by_prefix"].asBool(), args["--split_phase_saving"].asBool(),
-    args["--start_univ_mode"].asBool()
-  );
-} else if (args["--decision-heuristic"].asString() == "VSIDS") {
-  bool tiebreak_scores;
-  bool use_secondary_occurrences;
-  bool prefer_fewer_occurrences;
-  if (args["--tiebreak"].asString() == "arbitrary") {
-    tiebreak_scores = false;
-  } else if (args["--tiebreak"].asString() == "more-primary") {
-    tiebreak_scores = true;
-    use_secondary_occurrences = false;
-    prefer_fewer_occurrences = false;
-  } else if (args["--tiebreak"].asString() == "fewer-primary") {
-    tiebreak_scores = true;
-    use_secondary_occurrences = false;
-    prefer_fewer_occurrences = true;
-  } else if (args["--tiebreak"].asString() == "more-secondary") {
-    tiebreak_scores = true;
-    use_secondary_occurrences = true;
-    prefer_fewer_occurrences = false;
-  } else if (args["--tiebreak"].asString() == "fewer-secondary") {
-    tiebreak_scores = true;
-    use_secondary_occurrences = true;
-    prefer_fewer_occurrences = true;
-  } else {
-    assert(false);
-  }
-  decision_heuristic = make_unique<DecisionHeuristicVSIDSdeplearn>(*solver,
-                                                          args["--no-phase-saving"].asBool(),
-                                                          std::stod(args["--var-activity-decay"].asString()),
-                                                          std::stod(args["--var-activity-inc"].asString()),
-                                                          tiebreak_scores,
-                                                          use_secondary_occurrences,
-                                                          prefer_fewer_occurrences);
+  if (args["--dependency-learning"].asString() == "off") {
+    decision_heuristic = make_unique<DecisionHeuristicVMTFprefix>(*solver, args["--no-phase-saving"].asBool());
+  } else if (args["--decision-heuristic"].asString() == "VMTF") {
+    decision_heuristic = make_unique<DecisionHeuristicVMTFdeplearn>(*solver, args["--no-phase-saving"].asBool());
+  } else if (args["--decision-heuristic"].asString() == "VMTF_ORD") {
+    decision_heuristic = make_unique<DecisionHeuristicVMTForder>(*solver, args["--no-phase-saving"].asBool());
+  } else if (args["--decision-heuristic"].asString() == "SPLIT_VMTF") {
+    decision_heuristic = make_unique<DecisionHeuristicSplitVMTF>(
+      *solver, args["--no-phase-saving"].asBool(),
+      static_cast<uint32_t>(args["--mode-cycles"].asLong()),
+      args["--always-move"].asBool(),
+      args["--move_by_prefix"].asBool(),
+      args["--split_phase_saving"].asBool(),
+      args["--start_univ_mode"].asBool()
+    );
+  } else if (args["--decision-heuristic"].asString() == "VSIDS" ||
+      args["--decision-heuristic"].asString() == "SPLIT_VSIDS") {
+    bool tiebreak_scores;
+    bool use_secondary_occurrences;
+    bool prefer_fewer_occurrences;
+    if (args["--tiebreak"].asString() == "arbitrary") {
+      tiebreak_scores = false;
+    } else if (args["--tiebreak"].asString() == "more-primary") {
+      tiebreak_scores = true;
+      use_secondary_occurrences = false;
+      prefer_fewer_occurrences = false;
+    } else if (args["--tiebreak"].asString() == "fewer-primary") {
+      tiebreak_scores = true;
+      use_secondary_occurrences = false;
+      prefer_fewer_occurrences = true;
+    } else if (args["--tiebreak"].asString() == "more-secondary") {
+      tiebreak_scores = true;
+      use_secondary_occurrences = true;
+      prefer_fewer_occurrences = false;
+    } else if (args["--tiebreak"].asString() == "fewer-secondary") {
+      tiebreak_scores = true;
+      use_secondary_occurrences = true;
+      prefer_fewer_occurrences = true;
+    } else {
+      assert(false);
+    }
+    if (args["--decision-heuristic"].asString() == "VSIDS") {
+      decision_heuristic = make_unique<DecisionHeuristicVSIDSdeplearn>(*solver,
+        args["--no-phase-saving"].asBool(),
+        std::stod(args["--var-activity-decay"].asString()),
+        std::stod(args["--var-activity-inc"].asString()),
+        tiebreak_scores, use_secondary_occurrences, prefer_fewer_occurrences);
+    } else if (args["--decision-heuristic"].asString() == "SPLIT_VSIDS") {
+      decision_heuristic = make_unique<DecisionHeuristicSplitVSIDS>(*solver,
+        args["--no-phase-saving"].asBool(),
+        static_cast<uint32_t>(args["--mode-cycles"].asLong()),
+        std::stod(args["--var-activity-decay"].asString()),
+        std::stod(args["--var-activity-inc"].asString()),
+        args["--always-bump"].asBool(),
+        args["--split-phase-saving"].asBool(),
+        args["--start-univ-mode"].asBool(),
+        tiebreak_scores, use_secondary_occurrences, prefer_fewer_occurrences);
+    } else {
+      assert(false);
+    }
   } else if (args["--decision-heuristic"].asString() == "SGDB") {
     decision_heuristic = make_unique<DecisionHeuristicSGDB>(*solver,
                                                     args["--no-phase-saving"].asBool(),

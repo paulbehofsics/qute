@@ -17,6 +17,7 @@ class DependencyManagerWatched: public DependencyManager {
 
 friend class DecisionHeuristicVMTForder;
 friend class DecisionHeuristicSplitVMTF;
+friend class DecisionHeuristicSplitVSIDS;
 friend class DecisionHeuristicVMTFdeplearn;
 friend class DecisionHeuristicVSIDSdeplearn;
 friend class DecisionHeuristicSGDB;
