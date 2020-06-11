@@ -87,22 +87,17 @@ SGDB Options:
   --learning-rate-minimum <double>      Minimum learning rate [default: 0.12]
   --lambda-factor <double>              Regularization parameter [default: 0.1]
 
-Split VMTF Options:
+Split Heuristic Options:
   --mode-cycles <int>                   The number of restarts after which a mode switch happens [default: 1]
-  --always-move                         Force the heuristic to move variables for every learnt constraint
-  --move-by-prefix                      Move variables sorted by their quantifier depth when learning constraints
   --split-phase-saving                  Force the heuristic to keep track of saved phases for the decision modes separately
   --start-univ-mode                     Start the heuristic in universal mode instead of existential mode
 
+Split VMTF Options:
+  --always-move                         Force the heuristic to move variables for every learnt constraint
+  --move-by-prefix                      Move variables sorted by their quantifier depth when learning constraints
+
 Split VSIDS Options:
-  --tiebreak arg                        tiebreaking strategy for equally active variables [default: arbitrary]
-                                        (arbitrary, more-primary, fewer-primary, more-secondary, fewer-secondary)
-  --var-activity-inc <double>           variable activity increment [default: 1]
-  --var-activity-decay <double>         variable activity decay [default: 0.95]
-  --mode-cycles <int>                   The number of restarts after which a mode switch happens [default: 1]
   --always-bump                         Force the heuristic to bump variable scores for every learnt constraint
-  --split-phase-saving                  Force the heuristic to keep track of saved phases for the decision modes separately
-  --start-univ-mode                     Start the heuristic in universal mode instead of existential mode
 
 Luby Restart Options:
   --luby-restart-multiplier <int>       Multiplier for restart intervals [default: 50]
