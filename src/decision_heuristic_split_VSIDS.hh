@@ -38,6 +38,8 @@ protected:
   void precomputeVariableOccurrences(bool use_secondary_occurrences_for_tiebreaking);
   void bumpVariableScore(Variable v, DecisionModeData& mode);
   void bumpVariableScores(Constraint& c, DecisionModeData& mode);
+  void dipVariableScore(Variable v, DecisionModeData& mode);
+  void dipVariableScores(Constraint& c, DecisionModeData& mode);
   void rescaleVariableScores(DecisionModeData& mode);
   void decayVariableScores();
   Variable popFromVariableQueue();

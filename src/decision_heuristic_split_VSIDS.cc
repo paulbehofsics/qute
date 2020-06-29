@@ -64,9 +64,10 @@ void DecisionHeuristicSplitVSIDS::notifyLearned(Constraint& c, ConstraintType co
     } else if (constraint_type == clauses) {
       bumpVariableScores(c, univ_mode);
     }
-  }
-  else if (isConstraintTypeOfMode(constraint_type)) {
+  } else if (isConstraintTypeOfMode(constraint_type)) {
     bumpVariableScores(c, *mode);
+  } else {
+    dipVariableScores(c, *mode);
   }
 }
 
@@ -135,6 +136,23 @@ void DecisionHeuristicSplitVSIDS::bumpVariableScore(Variable v, DecisionModeData
     rescaleVariableScores(mode);
   }
 }
+
+void DecisionHeuristicSplitVSIDS::dipVariableScores(Constraint& c, DecisionModeData& mode) {
+  for (auto literal: c) {
+    Variable v = var(literal);
+    if (solver.variable_data_store->isAssigned(v) && !is_auxiliary[v - 1]) {
+      dipVariableScore(v, mode);
+    }
+  }
+}
+
+void DecisionHeuristicSplitVSIDS::dipVariableScore(Variable v, DecisionModeData& mode) {
+  mode.variable_activity[v] -= mode.score_increment;
+  mode.variable_queue.update(v);
+  if (mode.variable_activity[v] < -1e60) {
+    rescaleVariableScores(mode);
+  }
+} 
 
 void DecisionHeuristicSplitVSIDS::rescaleVariableScores(DecisionModeData& mode) {
   for (Variable v = 1; v <= solver.variable_data_store->lastVariable(); v++) {
