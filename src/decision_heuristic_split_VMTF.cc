@@ -170,11 +170,11 @@ void DecisionHeuristicSplitVMTF::moveToFront(Variable variable, DecisionModeData
   }
 
   /* Increase timestamp value */
-  if (timestamp == ((uint32_t)-1)) {
+  if (timestamp == (std::numeric_limits<int>::max() - 1)) {
     resetTimestamps();
   }
   mode.decision_list[variable - 1].timestamp = ++timestamp;
-
+  
   /* Detach variable from list */
   Variable current_prev = mode.decision_list[variable - 1].prev;
   Variable current_next = mode.decision_list[variable - 1].next;
@@ -194,30 +194,40 @@ void DecisionHeuristicSplitVMTF::moveToFront(Variable variable, DecisionModeData
 void DecisionHeuristicSplitVMTF::moveToBack(Variable variable, DecisionModeData& mode) {
   Variable current_head = mode.list_head;
 
-  /* If the variable is already at the head of the list or an auxiliary variable,
+  /* If the variable is the only variable in the list or an auxiliary variable,
      don't do anything. */
-  if (current_head == variable || is_auxiliary[variable - 1]) {
+  if ((current_head == variable && mode.decision_list[variable - 1].next == 0) || 
+      is_auxiliary[variable - 1]) {
     return;
   }
 
   /* Increase timestamp value */
-  if (timestamp == ((uint32_t)-1)) {
+  if (timestamp == (std::numeric_limits<int>::max() - 1)) {
     resetTimestamps();
   }
   mode.decision_list[variable - 1].timestamp = -(++timestamp);
 
-  /* Detach variable from list */
-  Variable current_prev = mode.decision_list[variable - 1].prev;
-  Variable current_next = mode.decision_list[variable - 1].next;
-  mode.decision_list[current_prev - 1].next = current_next;
-  mode.decision_list[current_next - 1].prev = current_prev;
+  /* Adjust next search */
+  if (mode.next_search == variable) {
+    mode.next_search = mode.decision_list[variable - 1].next;
+  }
+  /* Adjust list head */
+  if (mode.list_head == variable) {
+    mode.list_head = mode.decision_list[variable - 1].next;
+    } else {
+    /* Detach variable from list */
+    Variable current_prev = mode.decision_list[variable - 1].prev;
+    Variable current_next = mode.decision_list[variable - 1].next;
+    mode.decision_list[current_prev - 1].next = current_next;
+    mode.decision_list[current_next - 1].prev = current_prev;
 
-  /* Insert variable as list tail */
-  Variable current_head_prev = mode.decision_list[current_head - 1].prev;
-  mode.decision_list[current_head - 1].prev = variable;
-  mode.decision_list[variable - 1].next = current_head;
-  mode.decision_list[variable - 1].prev = current_head_prev;
-  mode.decision_list[current_head_prev - 1].next = variable;
+    /* Insert variable as list tail */
+    Variable current_head_prev = mode.decision_list[current_head - 1].prev;
+    mode.decision_list[current_head - 1].prev = variable;
+    mode.decision_list[variable - 1].next = current_head;
+    mode.decision_list[variable - 1].prev = current_head_prev;
+    mode.decision_list[current_head_prev - 1].next = variable;
+  }
   assert(checkOrder());
 }
 
@@ -288,9 +298,9 @@ void DecisionHeuristicSplitVMTF::clearOverflowQueue() {
   }
 }
 
-uint32_t DecisionHeuristicSplitVMTF::maxTimestampEligible() {
+int32_t DecisionHeuristicSplitVMTF::maxTimestampEligible() {
   Variable v = mode->list_head;
-  uint32_t max_timestamp = 0;
+  int32_t max_timestamp = 0;
   do {
     if (solver.dependency_manager->isDecisionCandidate(v) && mode->decision_list[v - 1].timestamp > max_timestamp) {
       assert(!is_auxiliary[v - 1]);

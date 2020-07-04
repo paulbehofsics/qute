@@ -4,6 +4,7 @@
 #include <vector>
 #include <queue>
 #include <random>
+#include <limits>
 #include "decision_heuristic.hh"
 #include "phase_saving.hh"
 #include "split_phase_saving.hh"
@@ -40,7 +41,7 @@ protected:
   void moveToFront(Variable variable, DecisionModeData& mode);
   void moveToBack(Variable variable, DecisionModeData& mode);
   void clearOverflowQueue();
-  uint32_t maxTimestampEligible();
+  int32_t maxTimestampEligible();
   bool checkOrder();
   void toggleMode();
   void addVariable(bool auxiliary, DecisionModeData& mode);
@@ -54,7 +55,7 @@ protected:
   struct ListEntry
   {
     Variable prev;
-    uint32_t timestamp;
+    int32_t timestamp;
     Variable next;
     ListEntry(): prev(1), timestamp(0), next(1) {}
   };
@@ -88,7 +89,7 @@ protected:
   DecisionModeData univ_mode;
   PhaseSaving phase_saving;
 
-  uint32_t timestamp;
+  int32_t timestamp;
   uint32_t backtrack_decision_level_before;
 
   bool no_phase_saving;
