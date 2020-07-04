@@ -38,6 +38,7 @@ protected:
 
   void resetTimestamps();
   void moveToFront(Variable variable, DecisionModeData& mode);
+  void moveToBack(Variable variable, DecisionModeData& mode);
   void clearOverflowQueue();
   uint32_t maxTimestampEligible();
   bool checkOrder();
@@ -48,6 +49,7 @@ protected:
   void moveVariables(Constraint& c, DecisionModeData& mode);
   void moveVariablesByPrefix(Constraint& c, DecisionModeData& mode);
   void moveVariablesArbitrary(Constraint& c, DecisionModeData& mode);
+  void moveVariablesBack(Constraint& c, DecisionModeData& mode);
 
   struct ListEntry
   {

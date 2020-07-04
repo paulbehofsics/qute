@@ -59,6 +59,8 @@ void DecisionHeuristicSplitVMTF::notifyLearned(Constraint& c, ConstraintType con
   }
   else if (isConstraintTypeOfMode(constraint_type)) {
     moveVariables(c, *mode);
+  } else {
+    moveVariablesBack(c, *mode);
   }
 }
 
@@ -148,6 +150,16 @@ void DecisionHeuristicSplitVMTF::moveVariablesArbitrary(Constraint& c, DecisionM
   }
 }
 
+void DecisionHeuristicSplitVMTF::moveVariablesBack(Constraint& c, DecisionModeData& mode) {
+  // Move to back all assigned variables in the learned constraint in arbitrary order
+  for (Literal l: c) {
+    Variable v = var(l);
+    if (solver.variable_data_store->isAssigned(v)) {
+      moveToBack(v, mode);
+    }
+  }
+}
+
 void DecisionHeuristicSplitVMTF::moveToFront(Variable variable, DecisionModeData& mode) {
   Variable current_head = mode.list_head;
 
@@ -176,6 +188,36 @@ void DecisionHeuristicSplitVMTF::moveToFront(Variable variable, DecisionModeData
   mode.decision_list[variable - 1].prev = current_head_prev;
   mode.decision_list[current_head_prev - 1].next = variable;
   mode.list_head = variable;
+  assert(checkOrder());
+}
+
+void DecisionHeuristicSplitVMTF::moveToBack(Variable variable, DecisionModeData& mode) {
+  Variable current_head = mode.list_head;
+
+  /* If the variable is already at the head of the list or an auxiliary variable,
+     don't do anything. */
+  if (current_head == variable || is_auxiliary[variable - 1]) {
+    return;
+  }
+
+  /* Increase timestamp value */
+  if (timestamp == ((uint32_t)-1)) {
+    resetTimestamps();
+  }
+  mode.decision_list[variable - 1].timestamp = -(++timestamp);
+
+  /* Detach variable from list */
+  Variable current_prev = mode.decision_list[variable - 1].prev;
+  Variable current_next = mode.decision_list[variable - 1].next;
+  mode.decision_list[current_prev - 1].next = current_next;
+  mode.decision_list[current_next - 1].prev = current_prev;
+
+  /* Insert variable as list tail */
+  Variable current_head_prev = mode.decision_list[current_head - 1].prev;
+  mode.decision_list[current_head - 1].prev = variable;
+  mode.decision_list[variable - 1].next = current_head;
+  mode.decision_list[variable - 1].prev = current_head_prev;
+  mode.decision_list[current_head_prev - 1].next = variable;
   assert(checkOrder());
 }
 
