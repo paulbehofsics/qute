@@ -39,7 +39,7 @@ protected:
   void bumpVariableScore(Variable v, DecisionModeData& mode);
   void bumpVariableScores(Constraint& c, DecisionModeData& mode);
   void rescaleVariableScores(DecisionModeData& mode);
-  void decayVariableScores();
+  void decayVariableScores(DecisionModeData& mode);
   Variable popFromVariableQueue();
   double getBestDecisionVariableScore();
   vector<Variable> getVariablesWithTopScore();
@@ -126,8 +126,8 @@ inline void DecisionHeuristicSplitVSIDS::notifyBacktrack(uint32_t decision_level
   backtrack_decision_level_before = decision_level_before;
 }
 
-inline void DecisionHeuristicSplitVSIDS::decayVariableScores() {
-  mode->score_increment *= (1 / score_decay_factor);
+inline void DecisionHeuristicSplitVSIDS::decayVariableScores(DecisionModeData& mode) {
+  mode.score_increment *= (1 / score_decay_factor);
 }
 
 inline Variable DecisionHeuristicSplitVSIDS::popFromVariableQueue() {

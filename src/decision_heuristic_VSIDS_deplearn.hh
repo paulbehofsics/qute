@@ -113,6 +113,7 @@ inline void DecisionHeuristicVSIDSdeplearn::notifyLearned(Constraint& c, Constra
       bumpVariableScore(v);
     }
   }
+  decayVariableScores();
 }
 
 inline void DecisionHeuristicVSIDSdeplearn::notifyBacktrack(uint32_t decision_level_before) {

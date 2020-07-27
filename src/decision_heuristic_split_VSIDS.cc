@@ -61,12 +61,15 @@ void DecisionHeuristicSplitVSIDS::notifyLearned(Constraint& c, ConstraintType co
   if (always_bump) {
     if (constraint_type == terms) {
       bumpVariableScores(c, exist_mode);
+      decayVariableScores(exist_mode);
     } else if (constraint_type == clauses) {
       bumpVariableScores(c, univ_mode);
+      decayVariableScores(univ_mode);
     }
   }
   else if (isConstraintTypeOfMode(constraint_type)) {
     bumpVariableScores(c, *mode);
+    decayVariableScores(*mode);
   }
 }
 
