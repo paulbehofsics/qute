@@ -64,7 +64,7 @@ class RewardLearning {
     Iterator end();
     size_t size();
 
-    const double step_size = 0.4;
+    const double step_size = 0.2;
     // The list nodes of all variables. nodes[0] represents the base of the circular list of assigned variables.
     vector<VariableNode> nodes;
     // The learnt quality of all variables. The best variable is determined this way.
