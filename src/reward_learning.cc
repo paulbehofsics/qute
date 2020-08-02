@@ -75,6 +75,7 @@ bool RewardLearning::hasBestVariable() {
 void RewardLearning::acceptReward(Variable v) {
   double reward = nodes[v].reward;
   variable_quality[v] = (1 - step_size) * variable_quality[v] + step_size * reward;
+  variable_heap.update(v);
 }
 
 void RewardLearning::resetReward(Variable v) {
