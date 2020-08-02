@@ -3,13 +3,7 @@
 
 #include "qcdcl.hh"
 #include "solver_types.hh"
-#include "variable_subset.hh"
-
-#include "minisat/mtl/Heap.h"
-#include "minisat/mtl/IntMap.h"
-
-using Minisat::Heap;
-using Minisat::IntMap;
+#include "reward_learning.hh"
 
 namespace Qute {
 
@@ -32,23 +26,10 @@ protected:
   lbool getPhase(Variable v);
   void savePhase(Variable v, lbool phase);
 
-  struct CompareVariables
-  {
-    CompareVariables(const IntMap<Variable, double>& variable_quality): variable_quality(variable_quality) {}
-    bool operator()(const Variable first, const Variable second) const {
-      return variable_quality[first] > variable_quality[second];
-    }
-    const IntMap<Variable, double>& variable_quality;
-  };
-
   const bool no_phase_saving;
-  
   uint32_t backtrack_decision_level_before;
-
   vector<bool> is_auxiliary;
-  IntMap<Variable, double> variable_quality;
-  Heap<Variable,CompareVariables> variable_queue;
-  VariableSubset assigned_vars;
+  RewardLearning learning;
 };
 
 // Implementation of inline methods
@@ -58,8 +39,8 @@ inline void DecisionHeuristicCQB::notifyBacktrack(uint32_t decision_level_before
 }
 
 inline Variable DecisionHeuristicCQB::popFromVariableQueue() {
-  assert(!variable_queue.empty());
-  return variable_queue.removeMin();
+  assert(learning.hasBestVariable());
+  return learning.popBestVariable();
 }
 
 inline bool DecisionHeuristicCQB::isAuxiliary(Variable v) {

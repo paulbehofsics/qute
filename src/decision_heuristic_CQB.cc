@@ -3,18 +3,18 @@
 namespace Qute {
   
 DecisionHeuristicCQB::DecisionHeuristicCQB(QCDCL_solver& solver, bool no_phase_saving):
-  DecisionHeuristic(solver), no_phase_saving(no_phase_saving), variable_queue(CompareVariables(variable_quality)) {}
+  DecisionHeuristic(solver), no_phase_saving(no_phase_saving) {}
 
 void DecisionHeuristicCQB::addVariable(bool auxiliary) {
   saved_phase.push_back(l_Undef);
   is_auxiliary.push_back(auxiliary);
-  assigned_vars.addVariable();
+  learning.addVariable();
 }
 
 void DecisionHeuristicCQB::notifyStart() {
   for (Variable v = 1; v <= solver.variable_data_store->lastVariable(); v++) {
     if (!isAuxiliary(v) && solver.dependency_manager->isDecisionCandidate(v)) {
-      variable_queue.insert(v);
+      learning.addCandidateVariable(v);
     }
   }
 }
@@ -23,7 +23,7 @@ void DecisionHeuristicCQB::notifyAssigned(Literal l) {
   Variable v = var(l);
   savePhase(v, sign(l));
   if (!isAuxiliary(v)) {
-    assigned_vars.insert(v);
+    learning.assign(v);
   }
 }
 
@@ -37,30 +37,35 @@ void DecisionHeuristicCQB::notifyUnassigned(Literal l) {
       solver.variable_data_store->isAssigned(watcher) &&
       solver.variable_data_store->varDecisionLevel(watcher) < backtrack_decision_level_before
     );
-    if (unwatched && !variable_queue.inHeap(v)) {
-      variable_queue.insert(v);
+    if (unwatched) {
+      learning.addCandidateVariableIfMissing(v);
     }
 
-    assigned_vars.remove(var(l));
+    learning.unassign(var(l));
   }
 }
 
 void DecisionHeuristicCQB::notifyEligible(Variable v) {
   if (!isAuxiliary(v)) {
-    variable_queue.update(v);
+    learning.updateCandidateVariable(v);
   }
 }
 
 void DecisionHeuristicCQB::notifyLearned(Constraint& c, ConstraintType constraint_type, vector<Literal>& conflict_side_literals) {
-  size_t constr_size = 1; // TODO: get constraint size or LBD
-  for (auto iter = assigned_vars.begin(); iter != assigned_vars.end(); ++iter) {
-    // TODO: modify variable_quality of variable *iter according to constraint size or LBD
+  size_t lbd = c.size;
+  double reward = 1;
+  if (lbd == 2) {
+    reward = 4;
+  } else if (lbd >= 3 && lbd <= 4) {
+    reward = 2;
   }
+  learning.setRewardForAssigned(reward);
+  learning.finalizeRewardCycle();
 }
 
 Literal DecisionHeuristicCQB::getDecisionLiteral() {
   Variable candidate = 0;
-  while (!variable_queue.empty() && !solver.dependency_manager->isDecisionCandidate(variable_queue[0])) {
+  while (learning.hasBestVariable() && !solver.dependency_manager->isDecisionCandidate(learning.peekBestVariable())) {
     popFromVariableQueue();
   }
   candidate = popFromVariableQueue();
