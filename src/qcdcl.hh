@@ -90,6 +90,7 @@ inline void QCDCL_solver::printStatistics() {
   cout << "Number of learned tautological clauses: " << solver_statistics.learned_tautological[false] <<  "\n";
   cout << "Number of learned terms: " << solver_statistics.learned_total[true] << "\n";
   cout << "Number of learned contradictory terms: " << solver_statistics.learned_tautological[true] << "\n";
+  cout << "Number of decisions: " << solver_statistics.nr_decisions << "\n";
   if (solver_statistics.nr_assignments) {
     cout << "Fraction of decisions among assignments: " << double(solver_statistics.nr_decisions) / double(solver_statistics.nr_assignments) << "\n";
   }
