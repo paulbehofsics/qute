@@ -29,7 +29,6 @@ void RewardLearning::updateCandidateVariable(Variable v) {
   variable_heap.update(v);
 }
 
-
 void RewardLearning::assign(Variable v) {
   Variable prev = nodes[0].prev;
   nodes[prev].next = v;
@@ -47,16 +46,14 @@ void RewardLearning::unassign(Variable v) {
   nodes[v].next = 0;
 }
 
-void RewardLearning::setRewardForAssigned(double reward) {
-  for (auto iter = begin(); iter != end(); ++iter) {
-    nodes[*iter].reward = reward;
-  }
+void RewardLearning::setReward(Variable v, double reward) {
+  nodes[v].reward = reward;
 }
 
 void RewardLearning::finalizeRewardCycle() {
-  for (size_t i = 1; i < size(); i++) {
-    acceptReward(i);
-    resetReward(i);
+  for (auto iter = begin(); iter != end(); ++iter) {
+    acceptReward(*iter);
+    resetReward(*iter);
   }
 }
 

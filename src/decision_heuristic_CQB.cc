@@ -59,7 +59,10 @@ void DecisionHeuristicCQB::notifyLearned(Constraint& c, ConstraintType constrain
   } else if (lbd >= 3 && lbd <= 4) {
     reward = 2;
   }
-  learning.setRewardForAssigned(reward);
+  for (Literal l: c) {
+    Variable v = var(l);
+    learning.setReward(v, reward);
+  }
   learning.finalizeRewardCycle();
 }
 

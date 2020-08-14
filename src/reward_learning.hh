@@ -21,7 +21,7 @@ class RewardLearning {
     void updateCandidateVariable(Variable v);
     void assign(Variable v);
     void unassign(Variable v);
-    void setRewardForAssigned(double reward);
+    void setReward(Variable v, double reward);
     void finalizeRewardCycle();
     Variable popBestVariable();
     Variable peekBestVariable();
