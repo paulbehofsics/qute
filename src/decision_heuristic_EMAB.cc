@@ -2,8 +2,8 @@
 
 namespace Qute {
   
-DecisionHeuristicEMAB::DecisionHeuristicEMAB(QCDCL_solver& solver, bool no_phase_saving):
-  DecisionHeuristic(solver), no_phase_saving(no_phase_saving) {}
+DecisionHeuristicEMAB::DecisionHeuristicEMAB(QCDCL_solver& solver, bool no_phase_saving, double step_size):
+  DecisionHeuristic(solver), no_phase_saving(no_phase_saving), learning(step_size) {}
 
 void DecisionHeuristicEMAB::addVariable(bool auxiliary) {
   saved_phase.push_back(l_Undef);

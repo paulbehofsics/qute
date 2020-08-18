@@ -10,7 +10,7 @@ namespace Qute {
 class DecisionHeuristicEMAB: public DecisionHeuristic {
 
 public:
-  DecisionHeuristicEMAB(QCDCL_solver& solver, bool no_phase_saving);
+  DecisionHeuristicEMAB(QCDCL_solver& solver, bool no_phase_saving, double step_size);
   virtual void addVariable(bool auxiliary);
   virtual void notifyStart();
   virtual void notifyAssigned(Literal l);

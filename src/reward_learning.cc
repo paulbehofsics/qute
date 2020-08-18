@@ -2,7 +2,8 @@
 
 namespace Qute {
 
-RewardLearning::RewardLearning(): variable_heap(CompareVariables(variable_quality)) {
+RewardLearning::RewardLearning(double step_size):
+    variable_heap(CompareVariables(variable_quality)), step_size(step_size) {
   // Insert empty node that represents the base of the circular list
   nodes.emplace_back();
 }

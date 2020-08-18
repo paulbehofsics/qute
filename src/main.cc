@@ -88,6 +88,9 @@ SGDB Options:
   --learning-rate-minimum <double>      Minimum learning rate [default: 0.12]
   --lambda-factor <double>              Regularization parameter [default: 0.1]
 
+EMAB Options:
+  --step-size <double>                  Step size for exponential moving average [default: 0.2]
+
 Split Heuristic Options:
   --mode-cycles <int>                   The number of restarts after which a mode switch happens [default: 1]
   --split-phase-saving                  Force the heuristic to keep track of saved phases for the decision modes separately
@@ -169,6 +172,8 @@ int main(int argc, const char** argv)
   argument_constraints.push_back(make_unique<DoubleRangeConstraint>(0, 1, "--learning-rate-decay"));
   argument_constraints.push_back(make_unique<DoubleRangeConstraint>(0, 1, "--learning-rate-minimum"));
   argument_constraints.push_back(make_unique<DoubleRangeConstraint>(0, 1, "--lambda-factor"));
+
+  argument_constraints.push_back(make_unique<DoubleRangeConstraint>(0, 1, "--step-size"));
 
   argument_constraints.push_back(make_unique<DoubleRangeConstraint>(1, std::numeric_limits<double>::infinity(), "--luby-restart-multiplier", false, true));
 
@@ -287,7 +292,8 @@ int main(int argc, const char** argv)
                                                     std::stod(args["--lambda-factor"].asString()));
   } else if (args["--decision-heuristic"].asString() == "EMAB") {
     decision_heuristic = make_unique<DecisionHeuristicEMAB>(*solver,
-      args["--no-phase-saving"].asBool());
+      args["--no-phase-saving"].asBool(),
+      std::stod(args["--step-size"].asString()));
   } else {
     assert(false);
   }
