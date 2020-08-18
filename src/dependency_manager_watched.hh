@@ -21,7 +21,7 @@ friend class DecisionHeuristicSplitVSIDS;
 friend class DecisionHeuristicVMTFdeplearn;
 friend class DecisionHeuristicVSIDSdeplearn;
 friend class DecisionHeuristicSGDB;
-friend class DecisionHeuristicCQB;
+friend class DecisionHeuristicEMAB;
 
 public:
   DependencyManagerWatched(QCDCL_solver& solver, string dependency_learning_strategy);

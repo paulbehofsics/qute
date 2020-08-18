@@ -1,5 +1,5 @@
-#ifndef decision_heuristic_CQB_hh
-#define decision_heuristic_CQB_hh
+#ifndef decision_heuristic_EMAB_hh
+#define decision_heuristic_EMAB_hh
 
 #include "qcdcl.hh"
 #include "solver_types.hh"
@@ -7,10 +7,10 @@
 
 namespace Qute {
 
-class DecisionHeuristicCQB: public DecisionHeuristic {
+class DecisionHeuristicEMAB: public DecisionHeuristic {
 
 public:
-  DecisionHeuristicCQB(QCDCL_solver& solver, bool no_phase_saving);
+  DecisionHeuristicEMAB(QCDCL_solver& solver, bool no_phase_saving);
   virtual void addVariable(bool auxiliary);
   virtual void notifyStart();
   virtual void notifyAssigned(Literal l);
@@ -34,24 +34,24 @@ protected:
 
 // Implementation of inline methods
 
-inline void DecisionHeuristicCQB::notifyBacktrack(uint32_t decision_level_before) {
+inline void DecisionHeuristicEMAB::notifyBacktrack(uint32_t decision_level_before) {
   backtrack_decision_level_before = decision_level_before;
 }
 
-inline Variable DecisionHeuristicCQB::popFromVariableQueue() {
+inline Variable DecisionHeuristicEMAB::popFromVariableQueue() {
   assert(learning.hasBestVariable());
   return learning.popBestVariable();
 }
 
-inline bool DecisionHeuristicCQB::isAuxiliary(Variable v) {
+inline bool DecisionHeuristicEMAB::isAuxiliary(Variable v) {
   return is_auxiliary[v - 1];
 }
 
-inline lbool DecisionHeuristicCQB::getPhase(Variable v) {
+inline lbool DecisionHeuristicEMAB::getPhase(Variable v) {
   return saved_phase[v - 1];
 }
 
-inline void DecisionHeuristicCQB::savePhase(Variable v, lbool phase) {
+inline void DecisionHeuristicEMAB::savePhase(Variable v, lbool phase) {
   saved_phase[v - 1] = phase;
 }
 

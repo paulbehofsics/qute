@@ -1,17 +1,17 @@
-#include "decision_heuristic_CQB.hh"
+#include "decision_heuristic_EMAB.hh"
 
 namespace Qute {
   
-DecisionHeuristicCQB::DecisionHeuristicCQB(QCDCL_solver& solver, bool no_phase_saving):
+DecisionHeuristicEMAB::DecisionHeuristicEMAB(QCDCL_solver& solver, bool no_phase_saving):
   DecisionHeuristic(solver), no_phase_saving(no_phase_saving) {}
 
-void DecisionHeuristicCQB::addVariable(bool auxiliary) {
+void DecisionHeuristicEMAB::addVariable(bool auxiliary) {
   saved_phase.push_back(l_Undef);
   is_auxiliary.push_back(auxiliary);
   learning.addVariable();
 }
 
-void DecisionHeuristicCQB::notifyStart() {
+void DecisionHeuristicEMAB::notifyStart() {
   for (Variable v = 1; v <= solver.variable_data_store->lastVariable(); v++) {
     if (!isAuxiliary(v) && solver.dependency_manager->isDecisionCandidate(v)) {
       learning.addCandidateVariable(v);
@@ -19,7 +19,7 @@ void DecisionHeuristicCQB::notifyStart() {
   }
 }
 
-void DecisionHeuristicCQB::notifyAssigned(Literal l) {
+void DecisionHeuristicEMAB::notifyAssigned(Literal l) {
   Variable v = var(l);
   savePhase(v, sign(l));
   if (!isAuxiliary(v)) {
@@ -27,7 +27,7 @@ void DecisionHeuristicCQB::notifyAssigned(Literal l) {
   }
 }
 
-void DecisionHeuristicCQB::notifyUnassigned(Literal l) {
+void DecisionHeuristicEMAB::notifyUnassigned(Literal l) {
   Variable v = var(l);
   if (!isAuxiliary(v)) {
     Variable watcher = solver.dependency_manager->watcher(v);
@@ -45,28 +45,21 @@ void DecisionHeuristicCQB::notifyUnassigned(Literal l) {
   }
 }
 
-void DecisionHeuristicCQB::notifyEligible(Variable v) {
+void DecisionHeuristicEMAB::notifyEligible(Variable v) {
   if (!isAuxiliary(v)) {
     learning.updateCandidateVariable(v);
   }
 }
 
-void DecisionHeuristicCQB::notifyLearned(Constraint& c, ConstraintType constraint_type, vector<Literal>& conflict_side_literals) {
-  size_t lbd = c.size;
-  double reward = 1;
-  if (lbd == 2) {
-    reward = 4;
-  } else if (lbd >= 3 && lbd <= 4) {
-    reward = 2;
-  }
+void DecisionHeuristicEMAB::notifyLearned(Constraint& c, ConstraintType constraint_type, vector<Literal>& conflict_side_literals) {
   for (Literal l: c) {
     Variable v = var(l);
-    learning.setReward(v, reward);
+    learning.setReward(v, 1);
   }
   learning.finalizeRewardCycle();
 }
 
-Literal DecisionHeuristicCQB::getDecisionLiteral() {
+Literal DecisionHeuristicEMAB::getDecisionLiteral() {
   Variable candidate = 0;
   while (learning.hasBestVariable() && !solver.dependency_manager->isDecisionCandidate(learning.peekBestVariable())) {
     popFromVariableQueue();

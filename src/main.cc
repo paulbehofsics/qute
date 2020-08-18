@@ -17,7 +17,7 @@
 #include "decision_heuristic_SGDB.hh"
 #include "decision_heuristic_split_VMTF.hh"
 #include "decision_heuristic_split_VSIDS.hh"
-#include "decision_heuristic_CQB.hh"
+#include "decision_heuristic_EMAB.hh"
 #include "dependency_manager_watched.hh"
 #include "restart_scheduler_none.hh"
 #include "restart_scheduler_inner_outer.hh"
@@ -57,7 +57,7 @@ General Options:
   --constraint-activity-inc <double>    constraint activity increment [default: 1]
   --constraint-activity-decay <double>  constraint activity decay [default: 0.999]
   --decision-heuristic arg              variable decision heuristic [default: VMTF]
-                                        (VSIDS | VMTF | VMTF_ORD | SGDB | SPLIT_VMTF | SPLIT_VSIDS | CQB)
+                                        (VSIDS | VMTF | VMTF_ORD | SGDB | SPLIT_VMTF | SPLIT_VSIDS | EMAB)
   --restarts arg                        restart strategy [default: inner-outer]
                                         (off | luby | inner-outer | EMA)
   --model-generation arg                model generation strategy for initial terms [default: depqbf]
@@ -140,7 +140,7 @@ int main(int argc, const char** argv)
   argument_constraints.push_back(make_unique<RegexArgumentConstraint>(non_neg_int, "--LBD-threshold", "unsigned int"));
   argument_constraints.push_back(make_unique<DoubleRangeConstraint>(0, 1, "--constraint-activity-decay"));
 
-  vector<string> decision_heuristics = {"VSIDS", "VMTF", "VMTF_ORD", "SGDB", "SPLIT_VMTF", "SPLIT_VSIDS", "CQB"};
+  vector<string> decision_heuristics = {"VSIDS", "VMTF", "VMTF_ORD", "SGDB", "SPLIT_VMTF", "SPLIT_VSIDS", "EMAB"};
   argument_constraints.push_back(make_unique<ListConstraint>(decision_heuristics, "--decision-heuristic"));
   
   vector<string> restart_strategies = {"off", "luby", "inner-outer", "EMA"};
@@ -285,8 +285,8 @@ int main(int argc, const char** argv)
                                                     std::stod(args["--learning-rate-decay"].asString()),
                                                     std::stod(args["--learning-rate-minimum"].asString()),
                                                     std::stod(args["--lambda-factor"].asString()));
-  } else if (args["--decision-heuristic"].asString() == "CQB") {
-    decision_heuristic = make_unique<DecisionHeuristicCQB>(*solver,
+  } else if (args["--decision-heuristic"].asString() == "EMAB") {
+    decision_heuristic = make_unique<DecisionHeuristicEMAB>(*solver,
       args["--no-phase-saving"].asBool());
   } else {
     assert(false);
