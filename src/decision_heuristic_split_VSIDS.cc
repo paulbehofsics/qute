@@ -133,7 +133,9 @@ void DecisionHeuristicSplitVSIDS::bumpVariableScores(Constraint& c, DecisionMode
 
 void DecisionHeuristicSplitVSIDS::bumpVariableScore(Variable v, DecisionModeData& mode) {
   mode.variable_activity[v] += mode.score_increment;
-  mode.variable_queue.update(v);
+  if (mode.variable_queue.inHeap(v)) {
+    mode.variable_queue.update(v);
+  }
   if (mode.variable_activity[v] > 1e60) {
     rescaleVariableScores(mode);
   }
@@ -142,7 +144,9 @@ void DecisionHeuristicSplitVSIDS::bumpVariableScore(Variable v, DecisionModeData
 void DecisionHeuristicSplitVSIDS::rescaleVariableScores(DecisionModeData& mode) {
   for (Variable v = 1; v <= solver.variable_data_store->lastVariable(); v++) {
     mode.variable_activity[v] *= 1e-60;
-    mode.variable_queue.update(v);
+    if (mode.variable_queue.inHeap(v)) {
+      mode.variable_queue.update(v);
+    }
   }
   mode.score_increment *= 1e-60;
 }
