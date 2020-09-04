@@ -66,8 +66,7 @@ void DecisionHeuristicSplitVSIDS::notifyLearned(Constraint& c, ConstraintType co
       bumpVariableScores(c, univ_mode);
       decayVariableScores(univ_mode);
     }
-  }
-  else if (isConstraintTypeOfMode(constraint_type)) {
+  } else if (isConstraintTypeOfMode(constraint_type)) {
     bumpVariableScores(c, *mode);
     decayVariableScores(*mode);
   }
